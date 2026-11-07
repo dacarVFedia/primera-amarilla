@@ -1,0 +1,10 @@
+# Solo se sube lo que necesita el registro. Todo lo demás (claves, historial, informes) se queda en el PC.
+*
+!.gitignore
+!amarillas.py
+!registro.py
+!registro_plantilla.html
+!README.md
+!.github/
+!.github/workflows/
+!.github/workflows/actualizar.yml

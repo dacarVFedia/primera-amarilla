@@ -1,0 +1,62 @@
+name: Actualizar registro
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Hora UTC. En invierno, España va una hora por delante: 8:00, 11:00, 14:00, 17:00, 20:00, 23:00 y 0:30.
+    - cron: "0 7,10,13,16,19,22 * * *"
+    - cron: "30 23 * * *"
+
+permissions:
+  actions: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: registro
+  cancel-in-progress: false
+
+jobs:
+  generar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TZ: Europe/Madrid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Recuperar partidos ya descargados
+        uses: actions/cache@v4
+        with:
+          path: cache_amarillas
+          key: amarillas-${{ github.run_id }}
+          restore-keys: amarillas-
+      - name: Generar la página
+        env:
+          FOOTBALL_DATA_KEY: ${{ secrets.FOOTBALL_DATA_KEY }}
+        run: python registro.py --no-abrir --estricto
+      - name: Preparar la publicación
+        run: |
+          mkdir _site
+          cp registro_amarillas.html _site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      # GitHub apaga las tareas programadas tras 60 días sin cambios en el repositorio
+      - name: Mantener activa la programación
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/actualizar.yml/enable"
+
+  publicar:
+    needs: generar
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.despliegue.outputs.page_url }}
+    steps:
+      - id: despliegue
+        uses: actions/deploy-pages@v4

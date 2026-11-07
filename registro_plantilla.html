@@ -1,0 +1,525 @@
+<title>Registro Primera Amarilla</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Libreta de árbitro: fondo de hierba muy apagado, tipografía de marcador y un solo color fuerte,
+   el amarillo de la tarjeta, reservado a lo que pasó de verdad en el partido. */
+:root {
+  --bg: #f2f4ef; --panel: #ffffff; --fg: #15211b; --muted: #5b6962; --line: #d8ded6;
+  --accent: #0f6b46; --bar: #c9d2ca; --card: #f7cb00; --card-edge: #b99800;
+  --ok: #17754a; --ok-bg: #dff1e6; --bad: #ad3b29; --bad-bg: #f8e2dd;
+  --display: "Barlow Condensed", "Arial Narrow", "Segoe UI", sans-serif;
+  --body: "Barlow", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1512; --panel: #16201b; --fg: #e8eee9; --muted: #95a59c; --line: #2b3831;
+  --accent: #52c290; --bar: #36443c; --card: #f7cb00; --card-edge: #8f7600;
+  --ok: #6fd6a3; --ok-bg: #173527; --bad: #f09a89; --bad-bg: #3d2019; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0e1512; --panel: #16201b; --fg: #e8eee9; --muted: #95a59c; --line: #2b3831;
+  --accent: #52c290; --bar: #36443c; --card: #f7cb00; --card-edge: #8f7600;
+  --ok: #6fd6a3; --ok-bg: #173527; --bad: #f09a89; --bad-bg: #3d2019; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font: 400 15px/1.45 var(--body); }
+.envoltura { max-width: 1120px; margin: 0 auto; padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 20px; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+a { color: var(--accent); }
+h1, h2, h3 { font-family: var(--display); margin: 0; text-wrap: balance; }
+
+.cabecera { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 24px; }
+.marca { display: flex; align-items: center; gap: 12px; }
+.marca .tarjeta { width: 24px; height: 34px; border-radius: 3px; transform: rotate(-7deg); }
+h1 { font-size: 38px; line-height: 1; font-weight: 700; }
+.cabecera p { margin: 0; color: var(--muted); font-size: 13px; }
+
+.tarjeta { display: inline-block; width: 10px; height: 14px; flex: none; border-radius: 2px; background: var(--card); box-shadow: inset 0 0 0 1px var(--card-edge); }
+
+.pestanas { display: flex; gap: 4px; overflow-x: auto; overflow-y: hidden; border-bottom: 1px solid var(--line); scrollbar-width: thin; }
+.pestanas button { padding: 8px 12px 9px; font: 600 17px/1.1 var(--display); color: var(--muted); white-space: nowrap; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.pestanas button:hover { color: var(--fg); }
+.pestanas button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.separador { flex: none; width: 1px; margin: 8px 6px; background: var(--line); }
+
+.cifras { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px 24px; }
+.cifra b { display: block; font: 700 30px/1.05 var(--display); font-variant-numeric: tabular-nums; }
+.cifra span { color: var(--muted); font-size: 13px; }
+
+.barra-vistas { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+.segmentos { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 2px; }
+.segmentos button { padding: 5px 12px; border-radius: 4px; font-weight: 500; font-size: 14px; color: var(--muted); }
+.segmentos button[aria-pressed="true"] { background: var(--accent); color: var(--panel); }
+.buscador { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.buscador input { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; width: 190px; max-width: 100%; }
+
+.jornadas { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+.jornadas button { flex: none; min-width: 54px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); text-align: center; }
+.jornadas b { display: block; font: 700 16px/1.1 var(--display); }
+.jornadas small { display: block; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.jornadas button[aria-pressed="true"] { background: var(--fg); border-color: var(--fg); }
+.jornadas button[aria-pressed="true"] b, .jornadas button[aria-pressed="true"] small { color: var(--bg); }
+.jornadas button.futura { background: transparent; }
+
+.titulo-seccion { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.titulo-seccion h2 { font-size: 24px; font-weight: 700; }
+.titulo-seccion span { color: var(--muted); font-size: 13px; }
+.dia { font: 600 17px/1.2 var(--display); color: var(--muted); grid-column: 1 / -1; padding-top: 6px; }
+.dia::first-letter { text-transform: uppercase; }
+
+.lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 10px; }
+.partido { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 7px; }
+.enfrentamiento { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: center; }
+.equipo { min-width: 0; display: flex; align-items: center; gap: 6px; font-weight: 500; line-height: 1.2; }
+.equipo.local { justify-content: flex-end; text-align: right; }
+.equipo.recibe { font-weight: 700; }
+.equipo .min { font-size: 12px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.marcador { font: 700 20px/1 var(--display); font-variant-numeric: tabular-nums; text-align: center; min-width: 46px; }
+.marcador.hora { font-size: 16px; font-weight: 600; color: var(--muted); }
+.prob { display: grid; grid-template-columns: 42px minmax(0, 1fr) 42px; gap: 8px; align-items: center; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.prob .izq { text-align: right; }
+.prob .fav { color: var(--fg); font-weight: 600; }
+.tramos { display: flex; gap: 2px; height: 8px; }
+.tramos i { display: block; background: var(--bar); border-radius: 1px; }
+.tramos i.fav { background: var(--accent); }
+.sin-prob { font-size: 12px; color: var(--muted); text-align: center; }
+.pie { display: flex; flex-wrap: wrap; gap: 3px 10px; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--muted); }
+.pie .arbitro { min-width: 0; }
+.etiqueta { padding: 1px 7px; border-radius: 10px; font-size: 11.5px; font-weight: 600; white-space: nowrap; background: var(--bg); color: var(--muted); }
+.etiqueta.ok { background: var(--ok-bg); color: var(--ok); }
+.etiqueta.mal { background: var(--bad-bg); color: var(--bad); }
+.etiquetas { display: flex; gap: 6px; flex-wrap: wrap; }
+.etiqueta.elegida { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: transparent; }
+.elige { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.elige select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; max-width: 100%; min-width: 0; }
+.elige select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.tabla-caja { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th { font-weight: 600; font-size: 12.5px; color: var(--muted); text-align: right; padding: 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th button { padding: 9px 10px; font-weight: 600; width: 100%; text-align: inherit; color: inherit; }
+th[aria-sort] button { color: var(--fg); }
+td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+tr:last-child > td { border-bottom: 0; }
+th:first-child, td:first-child { text-align: left; }
+td:first-child button { font-weight: 500; text-align: left; white-space: normal; min-width: 130px; }
+td:first-child button:hover { color: var(--accent); }
+tr.abierta > td { background: var(--bg); }
+td.detalle { white-space: normal; text-align: left; background: var(--bg); padding: 10px; }
+.reparto { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.mini { width: 90px; height: 8px; background: var(--bar); border-radius: 1px; overflow: hidden; display: flex; }
+.mini i { display: block; height: 100%; }
+.mini .am { background: var(--card); }
+.mini .loc { background: var(--accent); }
+
+.controles { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.vacio { padding: 28px 16px; text-align: center; color: var(--muted); background: var(--panel); border: 1px dashed var(--line); border-radius: 8px; }
+
+.notas { border-top: 1px solid var(--line); padding-top: 16px; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); font-size: 13.5px; color: var(--muted); }
+.notas > div { min-width: 0; }
+.notas h3 { font-size: 17px; font-weight: 600; color: var(--fg); margin-bottom: 4px; }
+.notas p { margin: 0 0 6px; max-width: 62ch; }
+</style>
+
+<div class="envoltura">
+  <header class="cabecera">
+    <div class="marca"><span class="tarjeta" aria-hidden="true"></span><h1>Primera amarilla</h1></div>
+    <p id="sello"></p>
+  </header>
+  <nav class="pestanas" id="pestanas" role="tablist" aria-label="Competición"></nav>
+  <main id="contenido" style="display:grid;gap:18px;min-width:0"></main>
+  <footer class="notas">
+    <div>
+      <h3>Cómo se lee</h3>
+      <p><span class="tarjeta" style="vertical-align:-2px"></span> marca al equipo que vio la primera amarilla, con su minuto. Va en amarillo solo lo que pasó de verdad.</p>
+      <p>La barra verde es el equipo más probable antes del partido. Los porcentajes no suman 100 porque una pequeña parte de los partidos acaba sin amarillas.</p>
+    </div>
+    <div>
+      <h3>Cómo se calcula</h3>
+      <p>Cada predicción usa solo lo ocurrido antes de ese partido, así que "Acertó" y "Falló" son una prueba real. Cuenta amarillas, faltas, amarillas que provoca al rival, puntos, jugar en casa y árbitro. No usa cuotas.</p>
+      <p>Si un partido no tiene árbitro publicado, puedes elegirlo en su desplegable y el porcentaje se recalcula. El árbitro suele mover pocos puntos. Tu elección se guarda solo en este navegador, y cuando se publique el árbitro real, manda el real.</p>
+      <p>En copas el modelo tiene pocos datos, sobre todo de equipos de ligas que no sigue. Fíate menos de esos porcentajes.</p>
+    </div>
+    <div>
+      <h3>De dónde sale</h3>
+      <p>Amarillas y minutos: <a href="https://www.espn.com/soccer/" rel="noopener">ESPN</a>. Calendario y árbitros de ligas: <a href="https://www.football-data.org/" rel="noopener">football-data.org</a>. Árbitros y jornadas de copas: <a href="https://www.uefa.com/" rel="noopener">UEFA</a>. Copas desde la fase de liga, sin las previas.</p>
+      <p>Es una estimación y falla a menudo. Una probabilidad alta no garantiza nada, y apostar puede hacerte perder dinero.</p>
+    </div>
+  </footer>
+</div>
+
+<script>
+const D = /*DATOS*/null;
+const COPAS = new Set(D.copas);
+const estado = { pestana: "proximos", vista: "jornadas", jornada: {}, abierta: null, orden: {}, filtroAlto: false, ordenProb: false, busca: "" };
+try { const g = localStorage.getItem("registro-pestana"); if (g !== null && (g === "proximos" || D.comps[+g])) estado.pestana = g === "proximos" ? g : +g; } catch (e) {}
+
+// Árbitros elegidos a mano para partidos sin árbitro publicado. Se recuerdan en este navegador.
+let elegidos = {};
+try { elegidos = JSON.parse(localStorage.getItem("registro-arbitros") || "{}") || {}; } catch (e) {}
+const claveP = m => [m.c, m.f, m.l, m.v].join("|");
+function recalcular(m) {
+  const nom = elegidos[claveP(m)], a = nom && D.arbitros[nom];
+  if (!a) { m.pl = m.pl0; m.pv = m.pv0; m.elegido = null; return; }
+  const q = 1 / (1 + Math.exp(-(m.b + D.pesoLoc * a[0] * 5 + D.pesoAm * a[1] * m.d)));
+  m.pl = Math.round(q * D.resta * 1000) / 10;
+  m.pv = Math.round((1 - q) * D.resta * 1000) / 10;
+  m.elegido = nom;
+}
+D.partidos.forEach(m => { if (m.b !== undefined) { m.pl0 = m.pl; m.pv0 = m.pv; recalcular(m); } });
+
+function selectorArbitro(m) {
+  const caja = el("label", "elige");
+  caja.append(el("span", "", fmtCorto.format(new Date(m.f)) + " · Árbitro:"));
+  const s = el("select");
+  s.id = "arb-" + D.partidos.indexOf(m);
+  s.setAttribute("aria-label", "Árbitro de " + m.l + " contra " + m.v);
+  s.append(new Option("Sin publicar, elegir", ""));
+  for (const n of D.arbitrosComp[m.c]) s.append(new Option(n + " (" + D.arbitros[n][2] + " part.)", n));
+  s.value = m.elegido || "";
+  s.onchange = () => {
+    if (s.value) elegidos[claveP(m)] = s.value; else delete elegidos[claveP(m)];
+    try { localStorage.setItem("registro-arbitros", JSON.stringify(elegidos)); } catch (e) {}
+    recalcular(m);
+    estado.foco = s.id;
+    pintar();
+  };
+  caja.append(s);
+  return caja;
+}
+
+const fmtHora = new Intl.DateTimeFormat("es-ES", { hour: "2-digit", minute: "2-digit" });
+const fmtDia = new Intl.DateTimeFormat("es-ES", { weekday: "long", day: "numeric", month: "long" });
+const fmtCorto = new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "short" });
+
+function el(tag, clase, texto) {
+  const n = document.createElement(tag);
+  if (clase) n.className = clase;
+  if (texto !== undefined && texto !== null) n.textContent = texto;
+  return n;
+}
+const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+const norm = t => (t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const diaDe = m => { const d = new Date(m.f); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+const conPrediccion = m => m.pl !== null && m.pl !== undefined;
+const evaluable = m => m.s === "fin" && conPrediccion(m) && m.pr && !m.e;
+const acierta = m => (m.pl >= m.pv ? "L" : "V") === m.pr;
+const hoyInicio = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+
+function resumenAcierto(lista) {
+  const ev = lista.filter(evaluable), altos = ev.filter(m => Math.max(m.pl, m.pv) >= 60);
+  return { n: ev.length, ok: ev.filter(acierta).length, nAlto: altos.length, okAlto: altos.filter(acierta).length };
+}
+
+function filaPartido(m, conComp) {
+  const c = el("article", "partido");
+  const enf = el("div", "enfrentamiento");
+  const recibe = lado => m.s === "fin" && m.pr === lado;
+  const equipo = (nombre, lado) => {
+    const n = el("div", "equipo " + (lado === "L" ? "local" : "visitante") + (recibe(lado) ? " recibe" : ""));
+    const t = el("span", "", nombre);
+    if (recibe(lado)) {
+      const tj = el("span", "tarjeta"); tj.setAttribute("aria-label", "Primera amarilla"); tj.title = "Primera amarilla";
+      const min = el("span", "min", m.m !== null && m.m !== undefined ? m.m + "'" : "");
+      if (lado === "L") n.append(t, min, tj); else n.append(tj, min, t);
+    } else n.append(t);
+    return n;
+  };
+  const centro = m.s === "fin" ? el("div", "marcador", m.gl + "–" + m.gv) : el("div", "marcador hora", m.s === "juego" ? "En juego" : m.s === "aplazado" ? "Aplazado" : fmtHora.format(new Date(m.f)));
+  enf.append(equipo(m.l, "L"), centro, equipo(m.v, "V"));
+  c.append(enf);
+
+  if (conPrediccion(m)) {
+    const favL = m.pl >= m.pv;
+    const p = el("div", "prob");
+    p.setAttribute("aria-label", "Probabilidad de recibir la primera amarilla: " + m.l + " " + m.pl + " %, " + m.v + " " + m.pv + " %");
+    const tr = el("div", "tramos");
+    const a = el("i", favL ? "fav" : ""), b = el("i", favL ? "" : "fav");
+    a.style.width = m.pl + "%"; b.style.width = m.pv + "%";
+    tr.append(a, b);
+    p.append(el("span", "izq" + (favL ? " fav" : ""), Math.round(m.pl) + " %"), tr, el("span", favL ? "" : "fav", Math.round(m.pv) + " %"));
+    c.append(p);
+  } else if (m.s !== "aplazado") {
+    c.append(el("div", "sin-prob", m.s === "fin" ? "Sin predicción: aún había pocos partidos de estos equipos" : new Date(m.f) - Date.now() > 21 * 864e5 ? "La predicción sale tres semanas antes" : "Sin predicción: pocos datos de estos equipos"));
+  }
+
+  const pie = el("div", "pie");
+  const izq = [fmtCorto.format(new Date(m.f))];
+  izq.push(m.a ? "Árbitro: " + m.a : "Árbitro sin publicar");
+  pie.append(m.b !== undefined ? selectorArbitro(m) : el("span", "arbitro", izq.join(" · ")));
+  const etq = el("div", "etiquetas");
+  if (conComp) etq.append(el("span", "etiqueta", D.comps[m.c]));
+  if (m.elegido) etq.append(el("span", "etiqueta elegida", "Con tu árbitro"));
+  if (m.s === "fin") {
+    if (!m.pr) etq.append(el("span", "etiqueta", "Sin amarillas"));
+    else if (m.e) etq.append(el("span", "etiqueta", "Las dos a la vez"));
+    else if (conPrediccion(m)) etq.append(acierta(m) ? el("span", "etiqueta ok", "Acertó") : el("span", "etiqueta mal", "Falló"));
+  } else if (m.s === "sin_datos") etq.append(el("span", "etiqueta", "Sin datos de tarjetas"));
+  if (etq.childNodes.length) pie.append(etq);
+  c.append(pie);
+  return c;
+}
+
+function grupoJornadas(lista) {
+  const g = new Map();
+  for (const m of lista) {
+    const k = m.j === null || m.j === undefined ? "x" : (m.r && !/league phase/i.test(m.r) ? m.r + "|" : "") + m.j;
+    if (!g.has(k)) g.set(k, { k, nombre: k === "x" ? "Otros" : (m.r && !/league phase/i.test(m.r) ? m.r : "J" + m.j), largo: k === "x" ? "Sin jornada" : (m.r && !/league phase/i.test(m.r) ? m.r : "Jornada " + m.j), ps: [], orden: m.j ?? 999 });
+    g.get(k).ps.push(m);
+  }
+  return [...g.values()].sort((a, b) => a.orden - b.orden || Math.min(...a.ps.map(diaDe)) - Math.min(...b.ps.map(diaDe)));
+}
+
+function jornadaInicial(gr) {
+  const hoy = hoyInicio();
+  const conHoy = gr.find(g => g.ps.some(m => diaDe(m) === hoy));
+  if (conHoy) return conHoy.k;
+  const pendiente = gr.find(g => g.ps.some(m => m.s === "pendiente" || m.s === "juego"));
+  return (pendiente || gr[gr.length - 1] || {}).k;
+}
+
+function vistaJornadas(cont, lista) {
+  const gr = grupoJornadas(lista);
+  if (!gr.length) { cont.append(el("div", "vacio", "Esta competición aún no tiene partidos publicados.")); return; }
+  const c = estado.pestana;
+  if (!gr.some(g => g.k === estado.jornada[c])) estado.jornada[c] = jornadaInicial(gr);
+  const riel = el("div", "jornadas"); riel.setAttribute("aria-label", "Jornadas");
+  let activo = null;
+  for (const g of gr) {
+    const b = el("button");
+    const r = resumenAcierto(g.ps), jugados = g.ps.filter(m => m.s === "fin").length;
+    b.append(el("b", "", g.nombre), el("small", "", r.n ? r.ok + "/" + r.n : jugados ? jugados + " jug." : "—"));
+    if (!jugados) b.classList.add("futura");
+    b.setAttribute("aria-pressed", g.k === estado.jornada[c]);
+    b.title = r.n ? g.largo + ": el modelo acertó " + r.ok + " de " + r.n : g.largo;
+    b.onclick = () => { estado.jornada[c] = g.k; pintar(); };
+    if (g.k === estado.jornada[c]) activo = b;
+    riel.append(b);
+  }
+  cont.append(riel);
+  requestAnimationFrame(() => { if (activo) riel.scrollLeft = activo.offsetLeft - riel.offsetLeft - riel.clientWidth / 2 + activo.offsetWidth / 2; });
+
+  const g = gr.find(x => x.k === estado.jornada[c]);
+  const t = el("div", "titulo-seccion");
+  const r = resumenAcierto(g.ps), fin = g.ps.filter(m => m.s === "fin");
+  const lo = fin.filter(m => m.pr === "L").length, vi = fin.filter(m => m.pr === "V").length;
+  t.append(el("h2", "", g.largo));
+  t.append(el("span", "", fin.length ? "Primera amarilla: local " + lo + ", visitante " + vi + (r.n ? " · el modelo acertó " + r.ok + " de " + r.n : "") : "Por jugar"));
+  cont.append(t);
+  const caja = el("div", "lista");
+  let dia = null;
+  for (const m of [...g.ps].sort((a, b) => new Date(a.f) - new Date(b.f))) {
+    const d = diaDe(m);
+    if (d !== dia) { caja.append(el("div", "dia", fmtDia.format(new Date(m.f)))); dia = d; }
+    caja.append(filaPartido(m));
+  }
+  cont.append(caja);
+}
+
+function tabla(cont, clave, columnas, filas, porDefecto, detalle) {
+  const ord = estado.orden[clave] || porDefecto;
+  const col = columnas.find(c => c.id === ord.id) || columnas[0];
+  const val = f => col.orden(f);
+  filas = [...filas].sort((a, b) => {
+    const x = val(a), y = val(b);
+    return (typeof x === "string" ? x.localeCompare(y, "es") : x - y) * ord.dir || b.pj - a.pj;
+  });
+  const caja = el("div", "tabla-caja"), t = el("table"), th = el("thead"), tr = el("tr");
+  for (const c of columnas) {
+    const h = el("th"); const b = el("button", "", c.titulo); if (c.ayuda) b.title = c.ayuda;
+    if (c.id === ord.id) h.setAttribute("aria-sort", ord.dir > 0 ? "ascending" : "descending");
+    b.onclick = () => {
+      const actual = estado.orden[clave] || porDefecto;
+      estado.orden[clave] = { id: c.id, dir: actual.id === c.id ? -actual.dir : (c.texto ? 1 : -1) };
+      pintar();
+    };
+    h.append(b); tr.append(h);
+  }
+  th.append(tr); t.append(th);
+  const cu = el("tbody");
+  for (const f of filas) {
+    const fila = el("tr");
+    const abierta = estado.abierta === clave + f.nombre;
+    if (abierta) fila.className = "abierta";
+    columnas.forEach((c, i) => {
+      const td = el("td");
+      if (i === 0) {
+        const b = el("button", "", f.nombre);
+        b.setAttribute("aria-expanded", abierta);
+        b.onclick = () => { estado.abierta = abierta ? null : clave + f.nombre; pintar(); };
+        td.append(b);
+      } else {
+        const v = c.pinta(f);
+        if (v instanceof Node) td.append(v); else td.textContent = v;
+      }
+      fila.append(td);
+    });
+    cu.append(fila);
+    if (abierta) {
+      const de = el("tr"), td = el("td", "detalle"); td.colSpan = columnas.length;
+      const li = el("div", "lista");
+      detalle(f).forEach(m => li.append(filaPartido(m)));
+      td.append(li); de.append(td); cu.append(de);
+    }
+  }
+  t.append(cu); caja.append(t); cont.append(caja);
+}
+
+function reparto(i, clase, texto) {
+  const r = el("div", "reparto"), m = el("div", "mini"), b = el("i", clase);
+  b.style.width = i + "%"; m.append(b); r.append(el("span", "", texto), m);
+  return r;
+}
+
+function vistaEquipos(cont, lista) {
+  const fin = lista.filter(m => m.s === "fin");
+  const eq = new Map();
+  const de = n => { if (!eq.has(n)) eq.set(n, { nombre: n, pj: 0, con: 0, pri: 0, am: 0, fal: 0, nf: 0, casa: 0, casaP: 0, fuera: 0, fueraP: 0 }); return eq.get(n); };
+  for (const m of fin) for (const [n, lado, am, fal] of [[m.l, "L", m.al, m.fl], [m.v, "V", m.av, m.fv]]) {
+    const e = de(n);
+    e.pj++; e.am += am;
+    if (fal !== null && fal !== undefined) { e.fal += fal; e.nf++; }
+    if (m.pr && !m.e) {
+      e.con++;
+      if (lado === "L") e.casaP++; else e.fueraP++;
+      if (m.pr === lado) { e.pri++; if (lado === "L") e.casa++; else e.fuera++; }
+    }
+  }
+  const filas = [...eq.values()];
+  if (!filas.length) { cont.append(el("div", "vacio", "Aún no hay partidos jugados en esta competición.")); return; }
+  const cabEq = el("div", "titulo-seccion");
+  cabEq.append(el("h2", "", "Equipos"), el("span", "", "Pulsa un equipo para ver sus partidos. Pulsa una columna para ordenar."));
+  cont.append(cabEq);
+  tabla(cont, "eq" + estado.pestana, [
+    { id: "n", titulo: "Equipo", texto: true, orden: f => f.nombre },
+    { id: "pj", titulo: "PJ", ayuda: "Partidos jugados", orden: f => f.pj, pinta: f => f.pj },
+    { id: "pri", titulo: "Vio la primera", ayuda: "Partidos en los que este equipo recibió la primera amarilla", orden: f => f.con ? f.pri / f.con : 0, pinta: f => reparto(pct(f.pri, f.con), "am", f.pri + "/" + f.con + " · " + pct(f.pri, f.con) + " %") },
+    { id: "ca", titulo: "En casa", orden: f => f.casaP ? f.casa / f.casaP : 0, pinta: f => f.casa + "/" + f.casaP },
+    { id: "fu", titulo: "Fuera", orden: f => f.fueraP ? f.fuera / f.fueraP : 0, pinta: f => f.fuera + "/" + f.fueraP },
+    { id: "am", titulo: "Amarillas/partido", orden: f => f.am / f.pj, pinta: f => (f.am / f.pj).toFixed(1) },
+    { id: "fa", titulo: "Faltas/partido", orden: f => f.nf ? f.fal / f.nf : 0, pinta: f => f.nf ? (f.fal / f.nf).toFixed(1) : "—" },
+  ], filas, { id: "pri", dir: -1 }, f => fin.filter(m => m.l === f.nombre || m.v === f.nombre).reverse());
+}
+
+function vistaArbitros(cont, lista) {
+  const fin = lista.filter(m => m.s === "fin" && m.a);
+  const ar = new Map();
+  for (const m of fin) {
+    if (!ar.has(m.a)) ar.set(m.a, { nombre: m.a, pj: 0, am: 0, con: 0, loc: 0, vis: 0, minS: 0, minN: 0 });
+    const a = ar.get(m.a);
+    a.pj++; a.am += m.al + m.av;
+    if (m.pr && !m.e) { a.con++; if (m.pr === "L") a.loc++; else a.vis++; }
+    if (m.pr && m.m !== null && m.m !== undefined) { a.minS += m.m; a.minN++; }
+  }
+  const filas = [...ar.values()];
+  if (!filas.length) { cont.append(el("div", "vacio", "Aún no hay árbitros registrados en esta competición.")); return; }
+  const cabAr = el("div", "titulo-seccion");
+  cabAr.append(el("h2", "", "Árbitros"), el("span", "", "Con pocos partidos, estos porcentajes dicen poco. Pulsa un árbitro para ver sus partidos."));
+  cont.append(cabAr);
+  tabla(cont, "ar" + estado.pestana, [
+    { id: "n", titulo: "Árbitro", texto: true, orden: f => f.nombre },
+    { id: "pj", titulo: "PJ", ayuda: "Partidos dirigidos", orden: f => f.pj, pinta: f => f.pj },
+    { id: "am", titulo: "Amarillas/partido", orden: f => f.am / f.pj, pinta: f => (f.am / f.pj).toFixed(1) },
+    { id: "lo", titulo: "Primera al local", ayuda: "En qué parte de sus partidos la primera amarilla fue para el equipo de casa", orden: f => f.con ? f.loc / f.con : 0, pinta: f => reparto(pct(f.loc, f.con), "loc", f.loc + "/" + f.con + " · " + pct(f.loc, f.con) + " %") },
+    { id: "vi", titulo: "Al visitante", orden: f => f.vis, pinta: f => f.vis },
+    { id: "mi", titulo: "Minuto medio", ayuda: "Minuto medio de la primera amarilla", orden: f => f.minN ? f.minS / f.minN : 0, pinta: f => f.minN ? Math.round(f.minS / f.minN) + "'" : "—" },
+  ], filas, { id: "pj", dir: -1 }, f => fin.filter(m => m.a === f.nombre).reverse());
+}
+
+function cifras(cont, lista) {
+  const fin = lista.filter(m => m.s === "fin"), con = fin.filter(m => m.pr && !m.e);
+  const lo = con.filter(m => m.pr === "L").length, r = resumenAcierto(lista);
+  const caja = el("div", "cifras");
+  const cifra = (v, t) => { const c = el("div", "cifra"); c.append(el("b", "", v), el("span", "", t)); caja.append(c); };
+  cifra(fin.length, "partidos jugados");
+  cifra(pct(lo, con.length) + " %", "primera amarilla al local");
+  cifra(pct(con.length - lo, con.length) + " %", "primera amarilla al visitante");
+  cifra(r.n ? pct(r.ok, r.n) + " %" : "—", r.n ? "acierto del modelo (" + r.ok + " de " + r.n + ")" : "acierto del modelo: sin partidos aún");
+  cifra(r.nAlto ? pct(r.okAlto, r.nAlto) + " %" : "—", r.nAlto ? "acierto con 60 % o más (" + r.okAlto + " de " + r.nAlto + ")" : "con 60 % o más: sin partidos aún");
+  cont.append(caja);
+}
+
+function vistaProximos(cont) {
+  const hoy = hoyInicio(), hasta = hoy + 21 * 864e5;
+  let lista = D.partidos.filter(m => { const d = diaDe(m); return d >= hoy && d <= hasta && (d === hoy || m.s === "pendiente" || m.s === "juego"); });
+  const t = el("div", "titulo-seccion");
+  t.append(el("h2", "", "Hoy y próximos partidos"), el("span", "", "De todas las competiciones, hasta tres semanas vista."));
+  cont.append(t);
+  const ctl = el("div", "controles");
+  const seg1 = el("div", "segmentos");
+  for (const [txt, val] of [["Todos", false], ["60 % o más", true]]) {
+    const b = el("button", "", txt); b.setAttribute("aria-pressed", estado.filtroAlto === val);
+    b.onclick = () => { estado.filtroAlto = val; pintar(); }; seg1.append(b);
+  }
+  const seg2 = el("div", "segmentos");
+  for (const [txt, val] of [["Por hora", false], ["Por probabilidad", true]]) {
+    const b = el("button", "", txt); b.setAttribute("aria-pressed", estado.ordenProb === val);
+    b.onclick = () => { estado.ordenProb = val; pintar(); }; seg2.append(b);
+  }
+  ctl.append(seg1, seg2); cont.append(ctl);
+  if (estado.filtroAlto) lista = lista.filter(m => conPrediccion(m) && Math.max(m.pl, m.pv) >= 60);
+  if (!lista.length) { cont.append(el("div", "vacio", estado.filtroAlto ? "Ningún partido llega al 60 %. Prueba con Todos." : "No hay partidos en las próximas tres semanas.")); return; }
+  const caja = el("div", "lista");
+  const prob = m => conPrediccion(m) ? Math.max(m.pl, m.pv) : 0;
+  const orden = [...lista].sort((a, b) => diaDe(a) - diaDe(b) || (estado.ordenProb ? prob(b) - prob(a) : 0) || new Date(a.f) - new Date(b.f));
+  let dia = null;
+  for (const m of orden) {
+    const d = diaDe(m);
+    if (d !== dia) { caja.append(el("div", "dia", (d === hoy ? "hoy, " : "") + fmtDia.format(new Date(m.f)))); dia = d; }
+    caja.append(filaPartido(m, true));
+  }
+  cont.append(caja);
+}
+
+function vistaBusqueda(cont, lista, texto) {
+  const q = norm(texto);
+  const r = lista.filter(m => norm(m.l).includes(q) || norm(m.v).includes(q) || norm(m.a).includes(q)).reverse();
+  const t = el("div", "titulo-seccion");
+  t.append(el("h2", "", "Resultados"), el("span", "", r.length + (r.length === 1 ? " partido" : " partidos") + " con “" + texto + "”"));
+  cont.append(t);
+  if (!r.length) { cont.append(el("div", "vacio", "Ningún equipo ni árbitro coincide. Revisa cómo está escrito.")); return; }
+  const c = el("div", "lista"); r.forEach(m => c.append(filaPartido(m))); cont.append(c);
+}
+
+function pintar() {
+  const nav = document.getElementById("pestanas"); nav.replaceChildren();
+  const boton = (txt, val) => {
+    const b = el("button", "", txt); b.setAttribute("role", "tab"); b.setAttribute("aria-selected", estado.pestana === val);
+    b.onclick = () => { estado.pestana = val; estado.abierta = null; try { localStorage.setItem("registro-pestana", String(val)); } catch (e) {} pintar(); };
+    return b;
+  };
+  nav.append(boton("Hoy y próximos", "proximos"), Object.assign(el("span", "separador"), { ariaHidden: "true" }));
+  D.comps.forEach((c, i) => {
+    if (c === D.copas[0]) nav.append(Object.assign(el("span", "separador"), { ariaHidden: "true" }));
+    nav.append(boton(c, i));
+  });
+  const cont = document.getElementById("contenido"); cont.replaceChildren();
+  pintarVista(cont);
+  if (estado.foco) { const f = document.getElementById(estado.foco); if (f) f.focus({ preventScroll: true }); estado.foco = null; }
+}
+
+function pintarVista(cont) {
+  if (estado.pestana === "proximos") { vistaProximos(cont); return; }
+  const lista = D.partidos.filter(m => m.c === estado.pestana);
+  cifras(cont, lista);
+  const barra = el("div", "barra-vistas"), seg = el("div", "segmentos");
+  for (const [txt, val] of [["Jornadas", "jornadas"], ["Equipos", "equipos"], ["Árbitros", "arbitros"]]) {
+    const b = el("button", "", txt); b.setAttribute("aria-pressed", estado.vista === val);
+    b.onclick = () => { estado.vista = val; estado.abierta = null; pintar(); }; seg.append(b);
+  }
+  const bus = el("label", "buscador", "Buscar");
+  const inp = el("input"); inp.type = "search"; inp.id = "buscar"; inp.placeholder = "Equipo o árbitro"; inp.value = estado.busca;
+  inp.oninput = () => { estado.busca = inp.value; pintar(); const n = document.getElementById("buscar"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
+  bus.append(inp); barra.append(seg, bus); cont.append(barra);
+  if (estado.busca.trim()) vistaBusqueda(cont, lista, estado.busca.trim());
+  else if (estado.vista === "equipos") vistaEquipos(cont, lista);
+  else if (estado.vista === "arbitros") vistaArbitros(cont, lista);
+  else vistaJornadas(cont, lista);
+}
+
+document.getElementById("sello").textContent = "Temporada " + D.temporada + " · actualizado " + fmtDia.format(new Date(D.generado)) + ", " + fmtHora.format(new Date(D.generado));
+pintar();
+</script>
