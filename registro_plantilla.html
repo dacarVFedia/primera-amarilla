@@ -96,6 +96,20 @@ h1 { font-size: 38px; line-height: 1; font-weight: 700; }
 .elige { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .elige select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; max-width: 100%; min-width: 0; }
 .elige select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.accion { padding: 3px 10px; border-radius: 5px; font-weight: 600; font-size: 12.5px; background: var(--accent); color: var(--panel); }
+.accion.secundaria { background: transparent; color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
+.accion:disabled { opacity: .6; cursor: default; }
+.aviso-arb { flex-basis: 100%; color: var(--bad); font-size: 12.5px; }
+dialog { width: min(480px, calc(100vw - 32px)); padding: 20px; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+dialog::backdrop { background: rgba(0, 0, 0, .45); }
+dialog h3 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+dialog p { margin: 0 0 10px; }
+dialog ol { margin: 0 0 14px; padding-left: 20px; display: grid; gap: 4px; }
+dialog label { display: grid; gap: 4px; font-weight: 600; font-size: 13.5px; }
+dialog input { font: inherit; font-weight: 400; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; width: 100%; box-sizing: border-box; }
+.dialogo-pie { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.dialogo-pie .accion { padding: 7px 14px; font-size: 14px; }
+.dialogo-error { color: var(--bad); font-size: 13px; margin: 8px 0 0; }
 
 .tabla-caja { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
@@ -140,7 +154,8 @@ td.detalle { white-space: normal; text-align: left; background: var(--bg); paddi
     <div>
       <h3>Cómo se calcula</h3>
       <p>Cada predicción usa solo lo ocurrido antes de ese partido, así que "Acertó" y "Falló" son una prueba real. Cuenta amarillas, faltas, amarillas que provoca al rival, puntos, jugar en casa y árbitro. No usa cuotas.</p>
-      <p>Si un partido no tiene árbitro publicado, puedes elegirlo en su desplegable y el porcentaje se recalcula. El árbitro suele mover pocos puntos. Tu elección se guarda solo en este navegador, y cuando se publique el árbitro real, manda el real.</p>
+      <p>Si un partido no tiene árbitro publicado, puedes elegirlo en su desplegable y el porcentaje se recalcula. El árbitro suele mover pocos puntos. Al pulsar Confirmar, se queda guardado en todos tus dispositivos y también después del partido. Si la fuente oficial publica otro árbitro, manda la fuente.</p>
+      <p id="caja-olvidar" hidden><button class="accion secundaria" id="olvidar" type="button">Olvidar la clave de este dispositivo</button></p>
       <p>En copas el modelo tiene pocos datos, sobre todo de equipos de ligas que no sigue. Fíate menos de esos porcentajes.</p>
     </div>
     <div>
@@ -151,29 +166,136 @@ td.detalle { white-space: normal; text-align: left; background: var(--bg); paddi
   </footer>
 </div>
 
+<dialog id="dialogo-clave" aria-labelledby="titulo-clave">
+  <form id="form-clave" novalidate>
+    <h3 id="titulo-clave">Conectar este dispositivo</h3>
+    <p>Para guardar árbitros en todos tus dispositivos, este navegador necesita una clave de GitHub. Se crea una vez y solo se guarda aquí. Solo sirve para este repositorio.</p>
+    <ol>
+      <li><a id="enlace-clave" target="_blank" rel="noopener">Abre la página de GitHub para crear la clave</a>.</li>
+      <li>En "Repository access", elige "Only select repositories" y marca <b>primera-amarilla</b>.</li>
+      <li>Comprueba que "Contents" está en "Read and write", pulsa "Generate token" y copia la clave.</li>
+    </ol>
+    <label for="campo-clave">Clave de GitHub
+      <input id="campo-clave" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+    </label>
+    <p class="dialogo-error" id="error-clave" role="alert" hidden></p>
+    <div class="dialogo-pie">
+      <button class="accion secundaria" id="cancelar-clave" type="button">Cancelar</button>
+      <button class="accion" type="submit">Conectar y confirmar</button>
+    </div>
+  </form>
+</dialog>
+
 <script>
 const D = /*DATOS*/null;
 const COPAS = new Set(D.copas);
 const estado = { pestana: "proximos", vista: "jornadas", jornada: {}, abierta: null, orden: {}, filtroAlto: false, ordenProb: false, busca: "" };
 try { const g = localStorage.getItem("registro-pestana"); if (g !== null && (g === "proximos" || D.comps[+g])) estado.pestana = g === "proximos" ? g : +g; } catch (e) {}
 
-// Árbitros elegidos a mano para partidos sin árbitro publicado. Se recuerdan en este navegador.
-let elegidos = {};
+// Árbitros de partidos sin árbitro publicado.
+// m.cf es el confirmado en el repositorio, común a todos los dispositivos.
+// "elegidos" guarda lo cambiado en este navegador ("" es quitarlo) y "enviados" lo que ya se mandó a GitHub
+// pero aún no ha llegado a esta página, porque regenerarla tarda unos minutos.
+const ARCHIVO_CONFIRMADOS = "arbitros_confirmados.csv";
+const ESPERA_ENVIADO = 30 * 60 * 1000;
+let elegidos = {}, enviados = {}, claveGitHub = null;
 try { elegidos = JSON.parse(localStorage.getItem("registro-arbitros") || "{}") || {}; } catch (e) {}
+try { enviados = JSON.parse(localStorage.getItem("registro-enviados") || "{}") || {}; } catch (e) {}
+try { claveGitHub = localStorage.getItem("registro-clave-github"); } catch (e) {}
 const claveP = m => [m.c, m.f, m.l, m.v].join("|");
+const guardarLocal = () => {
+  try {
+    localStorage.setItem("registro-arbitros", JSON.stringify(elegidos));
+    localStorage.setItem("registro-enviados", JSON.stringify(enviados));
+  } catch (e) {}
+};
+const valorArbitro = m => { const k = claveP(m); return k in elegidos ? elegidos[k] : (m.cf || ""); };
+const valorGuardado = m => { const k = claveP(m); return k in enviados ? enviados[k].v : (m.cf || ""); };
+const faltaConfirmar = m => valorArbitro(m) !== valorGuardado(m);
+function limpiarLocal(m) {
+  const k = claveP(m), real = m.cf || "";
+  if (k in enviados) {
+    if (enviados[k].v === real || Date.now() - enviados[k].t > ESPERA_ENVIADO) { delete enviados[k]; delete elegidos[k]; }
+  } else if (k in elegidos && elegidos[k] === real) delete elegidos[k];
+}
 function recalcular(m) {
-  const nom = elegidos[claveP(m)], a = nom && D.arbitros[nom];
+  const nom = valorArbitro(m), a = nom && D.arbitros[nom];
   if (!a) { m.pl = m.pl0; m.pv = m.pv0; m.elegido = null; return; }
   const q = 1 / (1 + Math.exp(-(m.b + D.pesoLoc * a[0] * 5 + D.pesoAm * a[1] * m.d)));
   m.pl = Math.round(q * D.resta * 1000) / 10;
   m.pv = Math.round((1 - q) * D.resta * 1000) / 10;
   m.elegido = nom;
 }
-D.partidos.forEach(m => { if (m.b !== undefined) { m.pl0 = m.pl; m.pv0 = m.pv; recalcular(m); } });
+D.partidos.forEach(m => { if (m.b !== undefined) { limpiarLocal(m); m.pl0 = m.pl; m.pv0 = m.pv; recalcular(m); } });
+guardarLocal();
+
+// Escribe el árbitro en el archivo del repositorio. La clave va directa a GitHub y no sale de aquí a ningún otro sitio.
+class ClaveRechazada extends Error {}
+async function escribirConfirmado(m, arbitro) {
+  const url = "https://api.github.com/repos/" + D.repo + "/contents/" + ARCHIVO_CONFIRMADOS;
+  const cabeceras = { Authorization: "Bearer " + claveGitHub, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
+  const revisar = r => { if ([401, 403, 404].includes(r.status)) throw new ClaveRechazada(); return r; };
+  for (let intento = 0; intento < 3; intento++) {
+    const r = revisar(await fetch(url + "?ref=main", { headers: cabeceras, cache: "no-store" }));
+    if (!r.ok) throw new Error("GitHub " + r.status);
+    const actual = await r.json();
+    const bytes = Uint8Array.from(atob(actual.content.replace(/\s/g, "")), c => c.charCodeAt(0));
+    const lineas = new TextDecoder().decode(bytes).split(/\r?\n/).filter(Boolean);
+    const comp = D.comps[m.c];
+    const prefijo = [D.anio, comp, m.l, m.v].join(";") + ";";
+    const nuevas = lineas.filter(l => !l.startsWith(prefijo));
+    if (arbitro) nuevas.push(prefijo + arbitro);
+    const texto = new TextEncoder().encode(nuevas.join("\n") + "\n");
+    const put = revisar(await fetch(url, {
+      method: "PUT", headers: cabeceras,
+      body: JSON.stringify({
+        message: (arbitro ? "Árbitro confirmado: " + arbitro + " en " : "Árbitro quitado en ") + m.l + " - " + m.v,
+        content: btoa(String.fromCharCode(...texto)), sha: actual.sha, branch: "main",
+      }),
+    }));
+    if (put.ok) return;
+    if (put.status !== 409 && put.status !== 422) throw new Error("GitHub " + put.status);
+  }
+  throw new Error("GitHub ocupado");
+}
+
+async function confirmar(m, idFoco) {
+  if (!claveGitHub) { abrirDialogoClave(m, idFoco); return; }
+  const k = claveP(m), valor = valorArbitro(m);
+  estado.guardando = k; estado.errorArb = null; estado.foco = idFoco; pintar();
+  try {
+    await escribirConfirmado(m, valor);
+    enviados[k] = { v: valor, t: Date.now() };
+    elegidos[k] = valor;
+    guardarLocal();
+  } catch (e) {
+    if (e instanceof ClaveRechazada) {
+      olvidarClave();
+      abrirDialogoClave(m, idFoco, "GitHub no ha aceptado esta clave. Crea otra con primera-amarilla marcado y Contents en Read and write.");
+    } else estado.errorArb = { k, texto: "No se ha podido guardar. Sigue elegido en este dispositivo. Vuelve a pulsar en un momento." };
+  }
+  estado.guardando = null; estado.foco = idFoco; pintar();
+}
+
+function olvidarClave() {
+  claveGitHub = null;
+  try { localStorage.removeItem("registro-clave-github"); } catch (e) {}
+  document.getElementById("caja-olvidar").hidden = true;
+}
+
+let pendienteClave = null;
+function abrirDialogoClave(m, idFoco, error) {
+  pendienteClave = { m, idFoco };
+  const texto = document.getElementById("error-clave");
+  texto.hidden = !error; texto.textContent = error || "";
+  document.getElementById("campo-clave").value = "";
+  document.getElementById("dialogo-clave").showModal();
+}
 
 function selectorArbitro(m) {
-  const caja = el("label", "elige");
-  caja.append(el("span", "", fmtCorto.format(new Date(m.f)) + " · Árbitro:"));
+  const k = claveP(m), caja = el("div", "elige"), etiqueta = el("label", "elige");
+  etiqueta.append(el("span", "", fmtCorto.format(new Date(m.f)) + " · Árbitro:"));
+  caja.append(etiqueta);
   const s = el("select");
   s.id = "arb-" + D.partidos.indexOf(m);
   s.setAttribute("aria-label", "Árbitro de " + m.l + " contra " + m.v);
@@ -181,13 +303,26 @@ function selectorArbitro(m) {
   for (const n of D.arbitrosComp[m.c]) s.append(new Option(n + " (" + D.arbitros[n][2] + " part.)", n));
   s.value = m.elegido || "";
   s.onchange = () => {
-    if (s.value) elegidos[claveP(m)] = s.value; else delete elegidos[claveP(m)];
-    try { localStorage.setItem("registro-arbitros", JSON.stringify(elegidos)); } catch (e) {}
+    elegidos[k] = s.value;
+    if (s.value === (m.cf || "") && !(k in enviados)) delete elegidos[k];
+    guardarLocal();
     recalcular(m);
+    if (estado.errorArb && estado.errorArb.k === k) estado.errorArb = null;
     estado.foco = s.id;
     pintar();
   };
-  caja.append(s);
+  etiqueta.append(s);
+  if (faltaConfirmar(m)) {
+    const guardando = estado.guardando === k;
+    const b = el("button", "accion" + (valorArbitro(m) ? "" : " secundaria"), guardando ? "Guardando…" : valorArbitro(m) ? "Confirmar" : "Quitar confirmación");
+    b.type = "button"; b.disabled = guardando;
+    b.onclick = () => confirmar(m, s.id);
+    caja.append(b);
+  }
+  if (estado.errorArb && estado.errorArb.k === k) {
+    const aviso = el("span", "aviso-arb", estado.errorArb.texto); aviso.setAttribute("role", "alert");
+    caja.append(aviso);
+  }
   return caja;
 }
 
@@ -248,11 +383,12 @@ function filaPartido(m, conComp) {
 
   const pie = el("div", "pie");
   const izq = [fmtCorto.format(new Date(m.f))];
-  izq.push(m.a ? "Árbitro: " + m.a : "Árbitro sin publicar");
+  izq.push(m.a || m.cf ? "Árbitro: " + (m.a || m.cf) : "Árbitro sin publicar");
   pie.append(m.b !== undefined ? selectorArbitro(m) : el("span", "arbitro", izq.join(" · ")));
   const etq = el("div", "etiquetas");
   if (conComp) etq.append(el("span", "etiqueta", D.comps[m.c]));
-  if (m.elegido) etq.append(el("span", "etiqueta elegida", "Con tu árbitro"));
+  if (m.b !== undefined ? m.elegido && !faltaConfirmar(m) : m.cf) etq.append(el("span", "etiqueta elegida", "Confirmado"));
+  else if (m.b !== undefined && m.elegido) etq.append(el("span", "etiqueta", "Sin confirmar"));
   if (m.s === "fin") {
     if (!m.pr) etq.append(el("span", "etiqueta", "Sin amarillas"));
     else if (m.e) etq.append(el("span", "etiqueta", "Las dos a la vez"));
@@ -476,7 +612,7 @@ function vistaProximos(cont) {
 
 function vistaBusqueda(cont, lista, texto) {
   const q = norm(texto);
-  const r = lista.filter(m => norm(m.l).includes(q) || norm(m.v).includes(q) || norm(m.a).includes(q)).reverse();
+  const r = lista.filter(m => norm(m.l).includes(q) || norm(m.v).includes(q) || norm(m.a || m.cf).includes(q)).reverse();
   const t = el("div", "titulo-seccion");
   t.append(el("h2", "", "Resultados"), el("span", "", r.length + (r.length === 1 ? " partido" : " partidos") + " con “" + texto + "”"));
   cont.append(t);
@@ -519,6 +655,24 @@ function pintarVista(cont) {
   else if (estado.vista === "arbitros") vistaArbitros(cont, lista);
   else vistaJornadas(cont, lista);
 }
+
+document.getElementById("enlace-clave").href = "https://github.com/settings/personal-access-tokens/new?" + new URLSearchParams({
+  name: "Primera amarilla", description: "Guardar árbitros confirmados", target_name: D.repo.split("/")[0], expires_in: "366", contents: "write",
+});
+document.getElementById("caja-olvidar").hidden = !claveGitHub;
+document.getElementById("olvidar").onclick = olvidarClave;
+document.getElementById("cancelar-clave").onclick = () => document.getElementById("dialogo-clave").close();
+document.getElementById("form-clave").onsubmit = ev => {
+  ev.preventDefault();
+  const valor = document.getElementById("campo-clave").value.trim(), texto = document.getElementById("error-clave");
+  if (!valor) { texto.hidden = false; texto.textContent = "Pega la clave para continuar."; return; }
+  claveGitHub = valor;
+  try { localStorage.setItem("registro-clave-github", valor); } catch (e) {}
+  document.getElementById("caja-olvidar").hidden = false;
+  document.getElementById("dialogo-clave").close();
+  const p = pendienteClave; pendienteClave = null;
+  if (p) confirmar(p.m, p.idFoco);
+};
 
 document.getElementById("sello").textContent = "Temporada " + D.temporada + " · actualizado " + fmtDia.format(new Date(D.generado)) + ", " + fmtHora.format(new Date(D.generado));
 pintar();

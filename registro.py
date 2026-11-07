@@ -25,6 +25,8 @@ CARPETA = os.path.dirname(os.path.abspath(__file__))
 PLANTILLA = os.path.join(CARPETA, "registro_plantilla.html")
 CONFIG = os.path.join(CARPETA, "config.json")
 ARBITROS_MANUAL = os.path.join(CARPETA, "arbitros.csv")
+ARBITROS_CONFIRMADOS = os.path.join(CARPETA, "arbitros_confirmados.csv")
+REPOSITORIO = os.environ.get("GITHUB_REPOSITORY") or "dacarVFedia/primera-amarilla"
 SALIDA = os.path.join(CARPETA, "registro_amarillas.html")
 DIAS_CON_PREDICCION = 21  # más lejos no se predice: el estado de forma de hoy ya no diría mucho
 ORDEN = ["LaLiga", "Premier League", "Serie A", "Bundesliga", "Ligue 1", "Eredivisie",
@@ -48,6 +50,20 @@ def arbitros_manual():
         return []
     with open(ARBITROS_MANUAL, encoding="utf-8-sig", newline="") as f:
         return [fila for fila in csv.DictReader(f, delimiter=";") if (fila.get("arbitro") or "").strip()]
+
+
+def arbitros_confirmados(temporada):
+    """Árbitros confirmados desde la página, por competición y equipos. Se guardan en el repositorio."""
+    if not os.path.exists(ARBITROS_CONFIRMADOS):
+        return {}
+    with open(ARBITROS_CONFIRMADOS, encoding="utf-8-sig", newline="") as f:
+        return {clave_confirmado(fila["competicion"], fila["local"], fila["visitante"]): fila["arbitro"].strip()
+                for fila in csv.DictReader(f, delimiter=";")
+                if fila.get("temporada") == str(temporada) and (fila.get("arbitro") or "").strip()}
+
+
+def clave_confirmado(comp, local, visitante):
+    return comp, am._simple(local), am._simple(visitante)
 
 
 def clave(c):
@@ -104,6 +120,8 @@ def construir():
     ahora = datetime.now(timezone.utc)
     hoy_local = datetime.now().astimezone().date()
     manual = arbitros_manual()
+    confirmados = arbitros_confirmados(actual)
+    usados = set()
     calendarios = {c: am.calendario_fd(am.LIGAS[c][0], actual, key) for c in am.LIGAS}
     for c in am.COPAS_UEFA:
         try:
@@ -122,6 +140,12 @@ def construir():
                 if am.parecido(p["local"], c["local"]) >= 1 and am.parecido(p["visitante"], c["visitante"]) >= 1:
                     p.update(cal=c, arbitro=c.get("arbitro"), jornada=c.get("jornada"), ronda=c.get("ronda"))
                     break
+        # La fuente oficial manda. Si no tiene árbitro, vale el confirmado desde la página.
+        if not p.get("arbitro"):
+            k = clave_confirmado(p["comp"], p["local"], p["visitante"])
+            if k in confirmados:
+                p["arbitro"], p["confirmado"] = confirmados[k], True
+                usados.add(k)
         # arbitros.csv solo vale para los partidos de hoy, que aún pueden no tener árbitro en la fuente
         if not p.get("arbitro") and fecha_de(p["fecha"]).astimezone().date() == hoy_local:
             p["arbitro"] = arbitro_manual(manual, p["local"], p["visitante"])
@@ -157,6 +181,8 @@ def construir():
             "al": p["am_l"], "av": p["am_v"], "fl": p["faltas_l"], "fv": p["faltas_v"],
             "pl": None if q is None else round(q * resta * 100, 1), "pv": None if q is None else round((1 - q) * resta * 100, 1),
         })
+        if p.get("confirmado"):
+            filas[-1]["cf"] = p["arbitro"]
 
     limite = ahora + timedelta(days=DIAS_CON_PREDICCION)
     for comp, cal in calendarios.items():
@@ -170,6 +196,14 @@ def construir():
             fila = {"c": ORDEN.index(comp), "j": c.get("jornada"), "r": c.get("ronda"), "f": c["fecha"],
                     "l": nombre(c["local"], comp), "v": nombre(c["visitante"], comp), "a": arb,
                     "s": estado_de(c, ahora), "pr": None, "pl": None, "pv": None}
+            if not c.get("arbitro"):
+                k = clave_confirmado(comp, fila["l"], fila["v"])
+                if k in confirmados:
+                    usados.add(k)
+                    fila["cf"] = confirmados[k]
+                    # Antes de empezar, la página parte del cálculo sin árbitro para poder cambiarlo o quitarlo
+                    arb = None if fila["s"] == "pendiente" else confirmados[k]
+                    fila["a"] = arb
             if ini <= limite and fila["s"] in ("pendiente", "juego"):
                 a = pron.pronostico(fila["l"], fila["v"], comp, arb)
                 if a:
@@ -191,9 +225,17 @@ def construir():
             a = pron.estado.arbitro(p["arbitro"])
             arbitros[p["arbitro"]] = [round(a["loc"], 5), round(a["am"], 5), a["n"]]
             por_comp[p["comp"]].add(p["arbitro"])
+    for (comp, _, _), nom in confirmados.items():
+        if comp in por_comp:
+            a = pron.estado.arbitro(pron.buscar_arbitro(nom))
+            arbitros.setdefault(nom, [round(a["loc"], 5), round(a["am"], 5), a["n"]])
+            por_comp[comp].add(nom)
+    for k in confirmados.keys() - usados:
+        print("Aviso: árbitro confirmado sin partido:", *k, confirmados[k])
 
     datos = {
         "comps": ORDEN, "copas": list(am.COPAS), "temporada": f"{actual}/{str(actual + 1)[2:]}",
+        "anio": actual, "repo": REPOSITORIO,
         "generado": ahora.isoformat(), "sinAmarilla": round(pron.sin_amarilla * 100, 1), "partidos": filas,
         "resta": resta, "pesoLoc": pron.pesos[6], "pesoAm": pron.pesos[7], "arbitros": arbitros,
         "arbitrosComp": [sorted(por_comp[c], key=am._simple) for c in ORDEN],
