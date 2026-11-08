@@ -37,8 +37,19 @@ COPAS = {
     "Europa League": "uefa.europa",
     "Conference League": "uefa.europa.conf",
 }
-# Competición -> identificador en la web de la UEFA (árbitro y jornada de las copas)
-COPAS_UEFA = {"Champions League": 1, "Europa League": 14, "Conference League": 2019}
+# Selecciones que salen en el registro (sin amistosos)
+SELECCIONES = {"Liga de Naciones": "uefa.nations"}
+# Partidos de selecciones que solo sirven para conocer a cada selección: (competición, liga en ESPN, desde, hasta)
+HISTORIA_SELECCIONES = (
+    ("Eurocopa", "uefa.euro", "2024-06-14", "2024-07-14"),
+    ("Liga de Naciones", "uefa.nations", "2024-09-01", "2025-06-10"),
+    ("Clasificación Mundial", "fifa.worldq.uefa", "2025-03-01", "2026-04-01"),
+    ("Mundial", "fifa.world", "2026-06-11", "2026-07-19"),
+)
+MESES_SELECCIONES = (3, 6, 7, 9, 10, 11)  # parones internacionales y torneos de verano
+NACIONALES = set(SELECCIONES) | {h[0] for h in HISTORIA_SELECCIONES}
+# Competición -> identificador en la web de la UEFA (árbitro y jornada)
+COPAS_UEFA = {"Champions League": 1, "Europa League": 14, "Conference League": 2019, "Liga de Naciones": 2014}
 TEMPORADAS_PASADAS = (2023, 2024, 2025)
 
 
@@ -219,7 +230,9 @@ def partidos_dia_espn(liga, dia):
 
 
 def liga_espn(comp):
-    return LIGAS[comp][1] if comp in LIGAS else COPAS.get(comp)
+    if comp in LIGAS:
+        return LIGAS[comp][1]
+    return COPAS.get(comp) or SELECCIONES.get(comp) or next((h[1] for h in HISTORIA_SELECCIONES if h[0] == comp), None)
 
 
 def alineacion_espn(liga, id_partido, terminado=True):
@@ -386,6 +399,14 @@ def descargar_historia(fd_key, hilos=6, aviso=print):
         if d.weekday() in (1, 2, 3):
             tareas += [(comp, liga, actual, d.isoformat()) for comp, liga in COPAS.items()]
         d += timedelta(days=1)
+    # Selecciones: torneos y fases pasadas para conocerlas, y la temporada actual de las que salen en el registro
+    rangos = list(HISTORIA_SELECCIONES) + [(c, liga, f"{actual}-09-01", hoy.isoformat()) for c, liga in SELECCIONES.items()]
+    for comp, liga, desde, hasta in rangos:
+        d, fin = date.fromisoformat(desde), min(date.fromisoformat(hasta), hoy)
+        while d <= fin:
+            if d.month in MESES_SELECCIONES:
+                tareas.append((comp, liga, temporada_actual(d), d.isoformat()))
+            d += timedelta(days=1)
 
     aviso(f"Amarillas: consultando {len(tareas)} días de partido (los ya guardados no gastan red)...")
 
@@ -413,6 +434,12 @@ def descargar_historia(fd_key, hilos=6, aviso=print):
             poner_arbitros([p for p in partidos if p["comp"] == comp], calendario_uefa(comp, actual), minimo=1)
         except Exception as e:  # sin la UEFA las copas siguen funcionando, solo sin árbitro
             fallos.append(f"{comp} (árbitros UEFA): {e}")
+    for comp in SELECCIONES:
+        for t in sorted({p["temporada"] for p in partidos if p["comp"] == comp}):
+            try:
+                poner_arbitros([p for p in partidos if p["comp"] == comp and p["temporada"] == t], calendario_uefa(comp, t))
+            except Exception as e:
+                fallos.append(f"{comp} {t} (árbitros UEFA): {e}")
     descargar_alineaciones(partidos, hilos=hilos, aviso=aviso)
     partidos.sort(key=lambda p: p["fecha"])
     return partidos, fallos
@@ -508,6 +535,15 @@ class Estado:
                 l["pts"] - v["pts"], a["loc"] * 5, a["am"] * d_am, self.cruce(id_l, id_v, xi)]
 
     def anotar(self, p):
+        """Los partidos de selecciones solo cuentan para la selección y el árbitro: así acierta más (ver analisis.py)."""
+        if p.get("comp") in NACIONALES:
+            g = dict(self.g)
+            self._anotar(dict(p, al=None))
+            self.g = g
+        else:
+            self._anotar(p)
+
+    def _anotar(self, p):
         g = self.g
         for lado, equipo in (("L", p["id_l"]), ("V", p["id_v"])):
             once = [j for j in ((p.get("al") or {}).get(lado) or []) if j.get("tit")]

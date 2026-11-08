@@ -30,7 +30,7 @@ REPOSITORIO = os.environ.get("GITHUB_REPOSITORY") or "dacarVFedia/primera-amaril
 SALIDA = os.path.join(CARPETA, "registro_amarillas.html")
 DIAS_CON_PREDICCION = 21  # más lejos no se predice: el estado de forma de hoy ya no diría mucho
 ORDEN = ["LaLiga", "Premier League", "Serie A", "Bundesliga", "Ligue 1", "Eredivisie",
-         "Champions League", "Europa League", "Conference League"]
+         "Champions League", "Europa League", "Conference League", *am.SELECCIONES]
 
 
 def clave_football_data():
@@ -151,11 +151,10 @@ def poner_directo(en_juego, fallos):
 
     La primera amarilla no cambia al acabar el partido, así que ya se sabe si la predicción acertó.
     """
-    ligas = {**{c: v[1] for c, v in am.LIGAS.items()}, **am.COPAS}
     pedir = {(ORDEN[f["c"]], f["f"][:10]) for f in en_juego}
     for comp, dia in pedir:
         try:
-            datos = am._pedir(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{ligas[comp]}/scoreboard?dates={dia.replace('-', '')}")
+            datos = am._pedir(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{am.liga_espn(comp)}/scoreboard?dates={dia.replace('-', '')}")
         except Exception as e:  # sin directo la página sigue saliendo, con el partido como "En juego"
             fallos.append(f"{comp} {dia} (directo): {e}")
             continue
@@ -304,7 +303,7 @@ def construir():
         print("Aviso: árbitro confirmado sin partido:", *k, confirmados[k])
 
     datos = {
-        "comps": ORDEN, "copas": list(am.COPAS), "temporada": f"{actual}/{str(actual + 1)[2:]}",
+        "comps": ORDEN, "copas": [*am.COPAS, *am.SELECCIONES], "temporada": f"{actual}/{str(actual + 1)[2:]}",
         "anio": actual, "repo": REPOSITORIO,
         "generado": ahora.isoformat(), "sinAmarilla": round(pron.sin_amarilla * 100, 1), "partidos": filas,
         "resta": resta, "pesoLoc": pron.pesos[6], "pesoAm": pron.pesos[7], "arbitros": arbitros,
