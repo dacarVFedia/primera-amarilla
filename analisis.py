@@ -72,7 +72,7 @@ def recorrer(partidos, clase=am.Estado, extra=None):
         el, ev = estado.equipos.get(p["id_l"]) or {}, estado.equipos.get(p["id_v"]) or {}
         n_min = min(el.get("n", 0), ev.get("n", 0))
         if p["primera"] and not p["empate_primera"] and p["comp"] in am.LIGAS:
-            x = estado.rasgos(p["id_l"], p["id_v"], p.get("arbitro"))
+            x = estado.rasgos(p["id_l"], p["id_v"], p.get("arbitro"), am.titulares(p.get("al")))
             if extra:
                 x = extra(x, p["comp"])
             filas.append({"x": x, "y": int(p["primera"] == "L"), "temporada": p["temporada"], "comp": p["comp"],

@@ -95,7 +95,8 @@ def previas_sin_mirar_resultado(partidos, actual):
         if p["temporada"] == actual:
             n = min((estado.equipos.get(p["id_l"]) or {}).get("n", 0), (estado.equipos.get(p["id_v"]) or {}).get("n", 0))
             if n >= am.MIN_PARTIDOS:
-                previas[p["id"]] = am.probabilidad(pesos, am.RASGOS_TODOS, estado.rasgos(p["id_l"], p["id_v"], p.get("arbitro")))
+                previas[p["id"]] = am.probabilidad(pesos, am.RASGOS_TODOS, estado.rasgos(p["id_l"], p["id_v"], p.get("arbitro"),
+                                                                                       am.titulares(p.get("al"))))
         estado.anotar(p)
     return previas
 
@@ -111,6 +112,38 @@ def estado_de(c, ahora):
     if c.get("fecha") and timedelta(0) < ahora - fecha_de(c["fecha"]) < timedelta(hours=3):
         return "juego"
     return "pendiente"
+
+
+def onces_cercanos(calendarios, ahora, fallos):
+    """Once titular de los partidos que empiezan en las próximas 2 horas o se están jugando, si ESPN ya lo ha publicado.
+
+    Devuelve [(comp, local, visitante, xi)] con los nombres de ESPN.
+    """
+    dias = set()
+    for comp, cal in calendarios.items():
+        for c in cal:
+            if c.get("fecha") and timedelta(hours=-3) <= fecha_de(c["fecha"]) - ahora <= timedelta(hours=2):
+                dias.add((comp, c["fecha"][:10]))
+    salida = []
+    for comp, dia in dias:
+        liga = am.liga_espn(comp)
+        try:
+            datos = am._pedir(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{liga}/scoreboard?dates={dia.replace('-', '')}")
+        except Exception as e:
+            fallos.append(f"{comp} {dia} (alineaciones): {e}")
+            continue
+        for ev in datos.get("events", []):
+            if (ev.get("status", {}).get("type") or {}).get("state") not in ("pre", "in"):
+                continue
+            equipos = {x["homeAway"]: x["team"]["displayName"] for x in ev["competitions"][0]["competitors"]}
+            try:
+                xi = am.titulares(am.alineacion_espn(liga, ev["id"], terminado=False))
+            except Exception as e:
+                fallos.append(f"{comp} {equipos.get('home')} (alineación): {e}")
+                continue
+            if xi:
+                salida.append((comp, equipos.get("home"), equipos.get("away"), xi))
+    return salida
 
 
 def poner_directo(en_juego, fallos):
@@ -209,6 +242,14 @@ def construir():
         if p.get("confirmado"):
             filas[-1]["cf"] = p["arbitro"]
 
+    onces = onces_cercanos(calendarios, ahora, fallos)
+
+    def once_de(comp, local, visitante):
+        for c, l, v, xi in onces:
+            if c == comp and am.parecido(local, l) >= 1 and am.parecido(visitante, v) >= 1:
+                return xi
+        return None
+
     limite = ahora + timedelta(days=DIAS_CON_PREDICCION)
     for comp, cal in calendarios.items():
         for c in cal:
@@ -230,14 +271,17 @@ def construir():
                     arb = None if fila["s"] == "pendiente" else confirmados[k]
                     fila["a"] = arb
             if ini <= limite and fila["s"] in ("pendiente", "juego"):
-                a = pron.pronostico(fila["l"], fila["v"], comp, arb)
+                xi = once_de(comp, fila["l"], fila["v"])
+                if xi:
+                    fila["xi"] = True
+                a = pron.pronostico(fila["l"], fila["v"], comp, arb, xi)
                 if a:
                     local_es_favorito = a["equipo"] == fila["l"]
                     fila["pl"] = round((a["prob"] if local_es_favorito else a["probOtro"]) * 100, 1)
                     fila["pv"] = round((a["probOtro"] if local_es_favorito else a["prob"]) * 100, 1)
                     # Sin árbitro publicado: la página recalcula sola con el que elija la persona
                     if not arb and fila["s"] == "pendiente":
-                        x = pron.estado.rasgos(pron.buscar_equipo(fila["l"], comp), pron.buscar_equipo(fila["v"], comp), None)
+                        x = pron.estado.rasgos(pron.buscar_equipo(fila["l"], comp), pron.buscar_equipo(fila["v"], comp), None, xi)
                         fila["b"] = round(sum(w * v for w, v in zip(pron.pesos, x)), 5)
                         fila["d"] = round(x[1], 5)
             filas.append(fila)

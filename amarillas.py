@@ -218,6 +218,63 @@ def partidos_dia_espn(liga, dia):
     return salida
 
 
+def liga_espn(comp):
+    return LIGAS[comp][1] if comp in LIGAS else COPAS.get(comp)
+
+
+def alineacion_espn(liga, id_partido, terminado=True):
+    """Jugadores de cada equipo con sus amarillas y faltas en ese partido. De la respuesta solo se guarda eso.
+
+    Devuelve {"L": [...], "V": [...]} con {"id", "n" (nombre), "pos", "tit" (titular), "am", "fal"},
+    o None si ESPN aún no tiene alineación. Solo se guarda en la caché cuando el partido ha terminado.
+    """
+    nombre = f"espn_al_{id_partido}.json"
+    guardado = _leer(nombre)
+    if guardado is not None:
+        return guardado or None
+    d = _pedir(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{liga}/summary?event={id_partido}")
+    lados = {}
+    for comp in (d.get("header") or {}).get("competitions", [])[:1]:
+        for c in comp.get("competitors", []):
+            lados[(c.get("team") or {}).get("id") or c.get("id")] = "L" if c.get("homeAway") == "home" else "V"
+    salida = {}
+    for r in d.get("rosters") or []:
+        lado = lados.get((r.get("team") or {}).get("id")) or ("L" if r.get("homeAway") == "home" else "V")
+        jugadores = []
+        for a in r.get("roster") or []:
+            st = {s.get("name"): s.get("value") for s in a.get("stats") or []}
+            jugadores.append({"id": (a.get("athlete") or {}).get("id"), "n": (a.get("athlete") or {}).get("displayName"),
+                              "pos": (a.get("position") or {}).get("abbreviation"), "tit": bool(a.get("starter")),
+                              "am": st.get("yellowCards") or 0, "fal": st.get("foulsCommitted"),
+                              "rec": st.get("foulsSuffered")})
+        if any(j["tit"] for j in jugadores):
+            salida[lado] = jugadores
+    if len(salida) < 2:
+        salida = {}
+    if terminado:
+        _guardar(nombre, salida)
+    return salida or None
+
+
+def descargar_alineaciones(partidos, hilos=8, aviso=print):
+    """Pone p["al"] en cada partido terminado (de la caché o de ESPN). Un fallo deja el partido sin alineación."""
+    pendientes = [p for p in partidos if "al" not in p and liga_espn(p["comp"])]
+    nuevos = sum(not os.path.exists(os.path.join(CACHE, f"espn_al_{p['id']}.json")) for p in pendientes)
+    if nuevos:
+        aviso(f"Alineaciones: descargando {nuevos} partidos nuevos...")
+
+    def uno(p):
+        try:
+            return alineacion_espn(liga_espn(p["comp"]), p["id"])
+        except Exception:
+            return None
+
+    with ThreadPoolExecutor(hilos) as ex:
+        for p, al in zip(pendientes, ex.map(uno, pendientes)):
+            p["al"] = al
+    return sum(1 for p in partidos if p.get("al"))
+
+
 # ---------------------------------------------------------------- unir ESPN y football-data
 
 ALIAS = {"internazionale": "inter", "lyonnais": "lyon", "munchen": "munich", "koln": "cologne", "saint germain": "sg",
@@ -356,6 +413,7 @@ def descargar_historia(fd_key, hilos=6, aviso=print):
             poner_arbitros([p for p in partidos if p["comp"] == comp], calendario_uefa(comp, actual), minimo=1)
         except Exception as e:  # sin la UEFA las copas siguen funcionando, solo sin árbitro
             fallos.append(f"{comp} (árbitros UEFA): {e}")
+    descargar_alineaciones(partidos, hilos=hilos, aviso=aviso)
     partidos.sort(key=lambda p: p["fecha"])
     return partidos, fallos
 
@@ -366,10 +424,20 @@ K_EQUIPO = 6       # partidos "de media" que se suman a cada equipo para no exag
 K_ARBITRO = 20     # ídem para árbitros
 PESO_TEMPORADA_ANTERIOR = 0.3
 MIN_PARTIDOS = 4   # por debajo no se da pronóstico
-NOMBRES_RASGOS = ("local", "amarillas", "provocadas", "primera", "faltas", "puntos", "arbitro_local", "arbitro_x_amarillas")
+K_JUGADOR = 10    # ídem para cada jugador
+NOMBRES_RASGOS = ("local", "amarillas", "provocadas", "primera", "faltas", "puntos", "arbitro_local", "arbitro_x_amarillas",
+                  "amonestables_x_regateadores")
 RASGOS_EQUIPOS = (0, 1, 2, 3, 4, 5)
 RASGOS_LOCAL = (0,)
-RASGOS_TODOS = (0, 1, 2, 3, 4, 5, 6, 7)
+RASGOS_TODOS = (0, 1, 2, 3, 4, 5, 6, 7, 8)
+
+
+def titulares(al):
+    """{"L": [ids], "V": [ids]} de una alineación de ESPN, o None si no la hay."""
+    if not al or not al.get("L") or not al.get("V"):
+        return None
+    xi = {lado: [j["id"] for j in al[lado] if j.get("tit")] for lado in ("L", "V")}
+    return xi if xi["L"] and xi["V"] else None
 
 
 class Estado:
@@ -379,6 +447,9 @@ class Estado:
         self.equipos = {}
         self.arbitros = {}
         self.temporada = None
+        # Jugadores: amarillas y faltas recibidas por partido como titular; ult = último once de cada equipo
+        self.jugadores, self.ult = {}, {}
+        self.gj = {"n": 50.0, "am": 50 * 0.2, "nr": 50.0, "rec": 50 * 1.1}
         # Medias generales, con valores de partida razonables
         self.g = {"n": 50.0, "am": 50 * 2.2, "pri": 50 * 0.48, "fal": 50 * 12.0, "pts": 50 * 1.35,
                   "con": 50.0, "loc": 50 * 0.44}
@@ -415,15 +486,46 @@ class Estado:
         am = (a["am"] + K_ARBITRO * m_am) / (a["n"] + K_ARBITRO)
         return {"loc": loc - m_loc, "am": am - m_am, "n": a["n"], "am_abs": am * 2, "loc_abs": loc}
 
-    def rasgos(self, id_l, id_v, arbitro):
+    def _tasa(self, i, campo, n_campo):
+        j = self.jugadores.get(i) or {}
+        return (j.get(campo, 0.0) + K_JUGADOR * self.gj[campo] / self.gj[n_campo]) / (j.get(n_campo, 0.0) + K_JUGADOR)
+
+    def cruce(self, id_l, id_v, xi=None):
+        """Amonestables de un once frente a quienes reciben faltas en el otro, con el once dado o el último."""
+        ids_l = (xi or {}).get("L") or self.ult.get(id_l)
+        ids_v = (xi or {}).get("V") or self.ult.get(id_v)
+        if not ids_l or not ids_v:
+            return 0.0
+        am_l, am_v = (sum(self._tasa(i, "am", "n") for i in ids) for ids in (ids_l, ids_v))
+        rec_l, rec_v = (sum(self._tasa(i, "rec", "nr") for i in ids) for ids in (ids_l, ids_v))
+        return (am_l * rec_v - am_v * rec_l) / 10
+
+    def rasgos(self, id_l, id_v, arbitro, xi=None):
         l, v = self.resumen(id_l), self.resumen(id_v)
         a = self.arbitro(arbitro)
         d_am = l["am"] - v["am"]
         return [1.0, d_am, l["riv"] - v["riv"], l["pri"] - v["pri"], (l["fal"] - v["fal"]) / 5,
-                l["pts"] - v["pts"], a["loc"] * 5, a["am"] * d_am]
+                l["pts"] - v["pts"], a["loc"] * 5, a["am"] * d_am, self.cruce(id_l, id_v, xi)]
 
     def anotar(self, p):
         g = self.g
+        for lado, equipo in (("L", p["id_l"]), ("V", p["id_v"])):
+            once = [j for j in ((p.get("al") or {}).get(lado) or []) if j.get("tit")]
+            if not once:
+                continue
+            self.ult[equipo] = [j["id"] for j in once]
+            gj = self.gj
+            for j in once:
+                e = self.jugadores.setdefault(j["id"], {})
+                e["n"] = e.get("n", 0.0) + 1
+                e["am"] = e.get("am", 0.0) + (j.get("am") or 0)
+                gj["n"] += 1
+                gj["am"] += j.get("am") or 0
+                if j.get("rec") is not None:
+                    e["nr"] = e.get("nr", 0.0) + 1
+                    e["rec"] = e.get("rec", 0.0) + j["rec"]
+                    gj["nr"] += 1
+                    gj["rec"] += j["rec"]
         for i, am, riv, pri, fal, gf, gc in (
                 (p["id_l"], p["am_l"], p["am_v"], p["primera"] == "L", p["faltas_l"], p["gl"], p["gv"]),
                 (p["id_v"], p["am_v"], p["am_l"], p["primera"] == "V", p["faltas_v"], p["gv"], p["gl"])):
@@ -462,7 +564,7 @@ def construir_filas(partidos):
         estado.nueva_temporada(p["temporada"])
         n_min = min((estado.equipos.get(p["id_l"]) or {}).get("n", 0), (estado.equipos.get(p["id_v"]) or {}).get("n", 0))
         if p["primera"] and not p["empate_primera"]:
-            filas.append({"x": estado.rasgos(p["id_l"], p["id_v"], p.get("arbitro")), "y": int(p["primera"] == "L"),
+            filas.append({"x": estado.rasgos(p["id_l"], p["id_v"], p.get("arbitro"), titulares(p.get("al"))), "y": int(p["primera"] == "L"),
                           "temporada": p["temporada"], "comp": p["comp"], "n_min": n_min, "arbitro": p.get("arbitro"),
                           "n_arb": estado.arbitro(p.get("arbitro"))["n"]})
         estado.anotar(p)
@@ -566,8 +668,11 @@ class Pronosticador:
                 mejor, nota = a, n
         return mejor if nota >= 0.8 else nombre
 
-    def pronostico(self, local, visitante, comp, arbitro=None):
-        """Devuelve el equipo más probable o None si no hay datos suficientes de los dos."""
+    def pronostico(self, local, visitante, comp, arbitro=None, xi=None):
+        """Devuelve el equipo más probable o None si no hay datos suficientes de los dos.
+
+        xi: once titular de cada equipo ({"L": [ids], "V": [ids]}) si ya se conoce; si no, se usa el último.
+        """
         id_l, id_v = self.buscar_equipo(local, comp), self.buscar_equipo(visitante, comp)
         if id_l is None or id_v is None or id_l == id_v:
             return None
@@ -575,7 +680,7 @@ class Pronosticador:
         if min(l["n"], v["n"]) < MIN_PARTIDOS:
             return None
         arb = self.buscar_arbitro(arbitro)
-        pl = probabilidad(self.pesos, RASGOS_TODOS, self.estado.rasgos(id_l, id_v, arb))
+        pl = probabilidad(self.pesos, RASGOS_TODOS, self.estado.rasgos(id_l, id_v, arb, xi))
         pl_total, pv_total = pl * (1 - self.sin_amarilla), (1 - pl) * (1 - self.sin_amarilla)
         info_arb = self.estado.arbitro(arb)
         return {

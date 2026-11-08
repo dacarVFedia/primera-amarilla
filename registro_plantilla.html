@@ -154,7 +154,7 @@ td.detalle { white-space: normal; text-align: left; background: var(--bg); paddi
     </div>
     <div>
       <h3>Cómo se calcula</h3>
-      <p>Cada predicción usa solo lo ocurrido antes de ese partido, así que "Acertó" y "Falló" son una prueba real. Cuenta amarillas, faltas, amarillas que provoca al rival, puntos, jugar en casa y árbitro. No usa cuotas.</p>
+      <p>Cada predicción usa solo lo ocurrido antes de ese partido, así que "Acertó" y "Falló" son una prueba real. Cuenta amarillas, faltas, amarillas que provoca al rival, puntos, jugar en casa y árbitro. También mira a los jugadores: cuánto se amonesta a los de un once y cuántas faltas reciben los del otro. Hasta que sale la alineación, alrededor de una hora antes, usa el último once de cada equipo; después, el titular ("Con once titular"). No usa cuotas.</p>
       <p>Si un partido no tiene árbitro publicado, puedes elegirlo en su desplegable y el porcentaje se recalcula. El árbitro suele mover pocos puntos. Al pulsar Confirmar, se queda guardado en todos tus dispositivos y también después del partido. Si la fuente oficial publica otro árbitro, manda la fuente.</p>
       <p id="caja-olvidar" hidden><button class="accion secundaria" id="olvidar" type="button">Olvidar la clave de este dispositivo</button></p>
       <p>En copas el modelo tiene pocos datos, sobre todo de equipos de ligas que no sigue. Fíate menos de esos porcentajes.</p>
@@ -392,6 +392,7 @@ function filaPartido(m, conComp) {
   if (conComp) etq.append(el("span", "etiqueta", D.comps[m.c]));
   if (m.b !== undefined ? m.elegido && !faltaConfirmar(m) : m.cf) etq.append(el("span", "etiqueta elegida", "Confirmado"));
   else if (m.b !== undefined && m.elegido) etq.append(el("span", "etiqueta", "Sin confirmar"));
+  if (m.xi && m.s !== "fin") etq.append(el("span", "etiqueta", "Con once titular"));
   if (m.s === "fin") {
     if (!m.pr) etq.append(el("span", "etiqueta", "Sin amarillas"));
     else if (m.e) etq.append(el("span", "etiqueta", "Las dos a la vez"));
