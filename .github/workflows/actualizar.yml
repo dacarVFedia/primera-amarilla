@@ -71,3 +71,32 @@ jobs:
     steps:
       - id: despliegue
         uses: actions/deploy-pages@v4
+
+  # GitHub se salta muchas tareas programadas: en horario de partidos cada ejecución lanza la siguiente.
+  # Si hay otra ejecución en marcha o en cola, no se lanza nada, para que no haya dos cadenas a la vez.
+  encadenar:
+    needs: publicar
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TZ: Europe/Madrid
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Esperar y lanzar la siguiente actualización
+        run: |
+          hora=$(date +%H%M)
+          if [ "$hora" -lt 1045 ] && [ "$hora" -gt 0030 ]; then
+            echo "Fuera del horario de partidos ($hora): la cadena se para hasta la tarea programada."
+            exit 0
+          fi
+          sleep 780
+          otras=$(gh run list -R "$REPO" -w actualizar.yml -L 20 --json databaseId,status \
+            --jq "[.[] | select(.databaseId != ${{ github.run_id }}) | select(.status != \"completed\")] | length")
+          if [ "$otras" -gt 0 ]; then
+            echo "Ya hay $otras ejecución(es) en marcha: no se lanza otra."
+            exit 0
+          fi
+          gh workflow run actualizar.yml -R "$REPO" --ref main
+          echo "Siguiente actualización lanzada."

@@ -3,6 +3,7 @@
 !.gitignore
 !amarillas.py
 !registro.py
+!analisis.py
 !registro_plantilla.html
 !README.md
 !arbitros_confirmados.csv
