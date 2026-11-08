@@ -113,6 +113,31 @@ def estado_de(c, ahora):
     return "pendiente"
 
 
+def poner_directo(en_juego, fallos):
+    """Marcador y primera amarilla de los partidos que se están jugando, desde ESPN.
+
+    La primera amarilla no cambia al acabar el partido, así que ya se sabe si la predicción acertó.
+    """
+    ligas = {**{c: v[1] for c, v in am.LIGAS.items()}, **am.COPAS}
+    pedir = {(ORDEN[f["c"]], f["f"][:10]) for f in en_juego}
+    for comp, dia in pedir:
+        try:
+            datos = am._pedir(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{ligas[comp]}/scoreboard?dates={dia.replace('-', '')}")
+        except Exception as e:  # sin directo la página sigue saliendo, con el partido como "En juego"
+            fallos.append(f"{comp} {dia} (directo): {e}")
+            continue
+        for ev in datos.get("events", []):
+            r = am._resumir_evento(ev, en_juego=True)
+            if not r:
+                continue
+            for f in en_juego:
+                if ORDEN[f["c"]] == comp and am.parecido(f["l"], r["local"]) >= 1 and am.parecido(f["v"], r["visitante"]) >= 1:
+                    estado = ev.get("status", {})
+                    descanso = (estado.get("type") or {}).get("name") == "STATUS_HALFTIME"
+                    f.update(gl=r["gl"], gv=r["gv"], pr=r["primera"], m=r["minuto"], e=bool(r["empate_primera"]),
+                             vivo="Descanso" if descanso else (estado.get("displayClock") or "En juego"))
+
+
 def construir():
     key = clave_football_data()
     partidos, fallos = am.descargar_historia(key)
@@ -216,6 +241,7 @@ def construir():
                         fila["b"] = round(sum(w * v for w, v in zip(pron.pesos, x)), 5)
                         fila["d"] = round(x[1], 5)
             filas.append(fila)
+    poner_directo([f for f in filas if f["s"] == "juego"], fallos)
     filas.sort(key=lambda f: f["f"])
 
     # Árbitros que se ofrecen en el desplegable: los que han dirigido esta temporada en cada competición

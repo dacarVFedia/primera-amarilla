@@ -79,6 +79,7 @@ h1 { font-size: 38px; line-height: 1; font-weight: 700; }
 .equipo .min { font-size: 12px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
 .marcador { font: 700 20px/1 var(--display); font-variant-numeric: tabular-nums; text-align: center; min-width: 46px; }
 .marcador.hora { font-size: 16px; font-weight: 600; color: var(--muted); }
+.marcador .vivo { display: block; margin-top: 3px; font: 600 11.5px/1 var(--body); color: var(--accent); white-space: nowrap; }
 .prob { display: grid; grid-template-columns: 42px minmax(0, 1fr) 42px; gap: 8px; align-items: center; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--muted); }
 .prob .izq { text-align: right; }
 .prob .fav { color: var(--fg); font-weight: 600; }
@@ -148,7 +149,7 @@ td.detalle { white-space: normal; text-align: left; background: var(--bg); paddi
   <footer class="notas">
     <div>
       <h3>Cómo se lee</h3>
-      <p><span class="tarjeta" style="vertical-align:-2px"></span> marca al equipo que vio la primera amarilla, con su minuto. Va en amarillo solo lo que pasó de verdad.</p>
+      <p><span class="tarjeta" style="vertical-align:-2px"></span> marca al equipo que vio la primera amarilla, con su minuto. Va en amarillo solo lo que pasó de verdad. En los partidos que se están jugando sale en cuanto ocurre, junto al marcador.</p>
       <p>La barra verde es el equipo más probable antes del partido. Los porcentajes no suman 100 porque una pequeña parte de los partidos acaba sin amarillas.</p>
     </div>
     <div>
@@ -352,7 +353,8 @@ function resumenAcierto(lista) {
 function filaPartido(m, conComp) {
   const c = el("article", "partido");
   const enf = el("div", "enfrentamiento");
-  const recibe = lado => m.s === "fin" && m.pr === lado;
+  const conMarcador = m.s === "fin" || (m.s === "juego" && m.gl !== undefined);
+  const recibe = lado => conMarcador && m.pr === lado;
   const equipo = (nombre, lado) => {
     const n = el("div", "equipo " + (lado === "L" ? "local" : "visitante") + (recibe(lado) ? " recibe" : ""));
     const t = el("span", "", nombre);
@@ -363,7 +365,8 @@ function filaPartido(m, conComp) {
     } else n.append(t);
     return n;
   };
-  const centro = m.s === "fin" ? el("div", "marcador", m.gl + "–" + m.gv) : el("div", "marcador hora", m.s === "juego" ? "En juego" : m.s === "aplazado" ? "Aplazado" : fmtHora.format(new Date(m.f)));
+  const centro = conMarcador ? el("div", "marcador", m.gl + "–" + m.gv) : el("div", "marcador hora", m.s === "juego" ? "En juego" : m.s === "aplazado" ? "Aplazado" : fmtHora.format(new Date(m.f)));
+  if (m.s === "juego" && m.vivo) centro.append(el("small", "vivo", m.vivo === "Descanso" || m.vivo === "En juego" ? m.vivo : "En juego · " + m.vivo));
   enf.append(equipo(m.l, "L"), centro, equipo(m.v, "V"));
   c.append(enf);
 
@@ -393,7 +396,12 @@ function filaPartido(m, conComp) {
     if (!m.pr) etq.append(el("span", "etiqueta", "Sin amarillas"));
     else if (m.e) etq.append(el("span", "etiqueta", "Las dos a la vez"));
     else if (conPrediccion(m)) etq.append(acierta(m) ? el("span", "etiqueta ok", "Acertó") : el("span", "etiqueta mal", "Falló"));
-  } else if (m.s === "sin_datos") etq.append(el("span", "etiqueta", "Sin datos de tarjetas"));
+  } else if (m.s === "juego" && m.pr) {
+    // La primera amarilla ya no cambia aunque el partido siga
+    if (m.e) etq.append(el("span", "etiqueta", "Las dos a la vez"));
+    else if (conPrediccion(m)) etq.append(acierta(m) ? el("span", "etiqueta ok", "Acertó") : el("span", "etiqueta mal", "Falló"));
+  } else if (m.s === "juego" && m.gl !== undefined) etq.append(el("span", "etiqueta", "Aún sin amarillas"));
+  else if (m.s === "sin_datos") etq.append(el("span", "etiqueta", "Sin datos de tarjetas"));
   if (etq.childNodes.length) pie.append(etq);
   c.append(pie);
   return c;

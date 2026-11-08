@@ -12,9 +12,11 @@ on:
       - registro_plantilla.html
       - .github/workflows/actualizar.yml
   schedule:
-    # Hora UTC. En invierno, España va una hora por delante: 8:00, 11:00, 14:00, 17:00, 20:00, 23:00 y 0:30.
-    - cron: "0 7,10,13,16,19,22 * * *"
-    - cron: "30 23 * * *"
+    # Hora UTC (España va 1 hora por delante en invierno y 2 en verano).
+    # Cada 15 minutos en horario de partidos, de 11:07 a 0:52 en invierno, y una vez de madrugada.
+    # Minutos poco habituales porque GitHub retrasa o salta más las tareas de las horas en punto.
+    - cron: "7,22,37,52 10-23 * * *"
+    - cron: "17 6 * * *"
 
 permissions:
   actions: write

@@ -163,9 +163,11 @@ def _segundos(detalle):
     return sum(int(n) for n in numeros[:2]) * 60.0
 
 
-def _resumir_evento(ev):
+def _resumir_evento(ev, en_juego=False):
+    """Resume un partido terminado. Con en_juego=True acepta también los que se están jugando."""
     c = ev["competitions"][0]
-    if not (ev.get("status", {}).get("type", {}).get("completed")):
+    tipo = ev.get("status", {}).get("type", {})
+    if not tipo.get("completed") and not (en_juego and tipo.get("state") == "in"):
         return None
     equipos = {x["homeAway"]: x for x in c["competitors"]}
     if "home" not in equipos or "away" not in equipos:
