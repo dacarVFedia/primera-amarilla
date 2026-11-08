@@ -323,10 +323,14 @@ def resumen(datos, fallos):
     for i, comp in enumerate(datos["comps"]):
         ps = [p for p in datos["partidos"] if p["c"] == i]
         fin = [p for p in ps if p["s"] == "fin"]
-        con = [p for p in fin if p["pr"] and not p["e"] and p["pl"] is not None]
-        ok = sum((p["pl"] >= p["pv"]) == (p["pr"] == "L") for p in con)
+        # Sin amarillas o con las dos a la vez cuenta como fallo, igual que en la página
+        con = [p for p in fin if p["pl"] is not None]
+
+        def bien(p):
+            return bool(p["pr"]) and not p["e"] and (p["pl"] >= p["pv"]) == (p["pr"] == "L")
+        ok = sum(map(bien, con))
         altos = [p for p in con if max(p["pl"], p["pv"]) >= 60]
-        ok_a = sum((p["pl"] >= p["pv"]) == (p["pr"] == "L") for p in altos)
+        ok_a = sum(map(bien, altos))
         print(f"  {comp:18} {len(fin):3} jugados de {len(ps):3} | árbitro {sum(bool(p['a']) for p in fin):3} | "
               f"sin jornada {sum(p['j'] is None for p in fin):2} | sin datos {sum(p['s'] == 'sin_datos' for p in ps):2} | "
               f"acierta {ok}/{len(con)} | >=60%: {ok_a}/{len(altos)}")

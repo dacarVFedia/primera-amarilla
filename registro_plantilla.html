@@ -150,7 +150,7 @@ td.detalle { white-space: normal; text-align: left; background: var(--bg); paddi
     <div>
       <h3>Cómo se lee</h3>
       <p><span class="tarjeta" style="vertical-align:-2px"></span> marca al equipo que vio la primera amarilla, con su minuto. Va en amarillo solo lo que pasó de verdad. En los partidos que se están jugando sale en cuanto ocurre, junto al marcador.</p>
-      <p>La barra verde es el equipo más probable antes del partido. Los porcentajes no suman 100 porque una pequeña parte de los partidos acaba sin amarillas.</p>
+      <p>La barra verde es el equipo más probable antes del partido. Los porcentajes no suman 100 porque una pequeña parte de los partidos acaba sin amarillas. Si pasa eso, o si los dos equipos ven la primera a la vez, cuenta como fallo.</p>
     </div>
     <div>
       <h3>Cómo se calcula</h3>
@@ -341,8 +341,9 @@ const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
 const norm = t => (t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const diaDe = m => { const d = new Date(m.f); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
 const conPrediccion = m => m.pl !== null && m.pl !== undefined;
-const evaluable = m => m.s === "fin" && conPrediccion(m) && m.pr && !m.e;
-const acierta = m => (m.pl >= m.pv ? "L" : "V") === m.pr;
+// Un partido sin amarillas o con las dos a la vez cuenta como fallo
+const evaluable = m => m.s === "fin" && conPrediccion(m);
+const acierta = m => !!m.pr && !m.e && (m.pl >= m.pv ? "L" : "V") === m.pr;
 const hoyInicio = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
 
 function resumenAcierto(lista) {
@@ -394,12 +395,13 @@ function filaPartido(m, conComp) {
   else if (m.b !== undefined && m.elegido) etq.append(el("span", "etiqueta", "Sin confirmar"));
   if (m.xi && m.s !== "fin") etq.append(el("span", "etiqueta", "Con once titular"));
   if (m.s === "fin") {
-    if (!m.pr) etq.append(el("span", "etiqueta", "Sin amarillas"));
+    if (conPrediccion(m) && (!m.pr || m.e)) etq.append(el("span", "etiqueta mal", m.pr ? "Falló · las dos a la vez" : "Falló · sin amarillas"));
+    else if (!m.pr) etq.append(el("span", "etiqueta", "Sin amarillas"));
     else if (m.e) etq.append(el("span", "etiqueta", "Las dos a la vez"));
     else if (conPrediccion(m)) etq.append(acierta(m) ? el("span", "etiqueta ok", "Acertó") : el("span", "etiqueta mal", "Falló"));
   } else if (m.s === "juego" && m.pr) {
     // La primera amarilla ya no cambia aunque el partido siga
-    if (m.e) etq.append(el("span", "etiqueta", "Las dos a la vez"));
+    if (m.e) etq.append(el("span", conPrediccion(m) ? "etiqueta mal" : "etiqueta", conPrediccion(m) ? "Falló · las dos a la vez" : "Las dos a la vez"));
     else if (conPrediccion(m)) etq.append(acierta(m) ? el("span", "etiqueta ok", "Acertó") : el("span", "etiqueta mal", "Falló"));
   } else if (m.s === "juego" && m.gl !== undefined) etq.append(el("span", "etiqueta", "Aún sin amarillas"));
   else if (m.s === "sin_datos") etq.append(el("span", "etiqueta", "Sin datos de tarjetas"));
