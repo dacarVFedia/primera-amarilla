@@ -191,7 +191,7 @@ td.detalle { white-space: normal; text-align: left; background: var(--bg); paddi
 const D = /*DATOS*/null;
 const COPAS = new Set(D.copas);
 const estado = { pestana: "proximos", vista: "jornadas", jornada: {}, abierta: null, orden: {}, filtroAlto: false, ordenProb: false, busca: "" };
-try { const g = localStorage.getItem("registro-pestana"); if (g !== null && (g === "proximos" || D.comps[+g])) estado.pestana = g === "proximos" ? g : +g; } catch (e) {}
+try { const g = localStorage.getItem("registro-pestana"); if (g !== null && (g === "proximos" || g === "pasados" || D.comps[+g])) estado.pestana = g === "proximos" || g === "pasados" ? g : +g; } catch (e) {}
 
 // Árbitros de partidos sin árbitro publicado.
 // m.cf es el confirmado en el repositorio, común a todos los dispositivos.
@@ -593,7 +593,9 @@ function vistaProximos(cont) {
   const hoy = hoyInicio(), hasta = hoy + 21 * 864e5;
   let lista = D.partidos.filter(m => { const d = diaDe(m); return d >= hoy && d <= hasta && (d === hoy || m.s === "pendiente" || m.s === "juego"); });
   const t = el("div", "titulo-seccion");
-  t.append(el("h2", "", "Hoy y próximos partidos"), el("span", "", "De todas las competiciones, hasta tres semanas vista."));
+  const g = resumenAcierto(D.partidos);
+  t.append(el("h2", "", "Hoy y próximos partidos"), el("span", "", "De todas las competiciones, hasta tres semanas vista." +
+    (g.n ? " Acierto global de la temporada: " + pct(g.ok, g.n) + " % (" + g.ok + " aciertos, " + (g.n - g.ok) + " fallos)." : "")));
   cont.append(t);
   const ctl = el("div", "controles");
   const seg1 = el("div", "segmentos");
@@ -621,6 +623,57 @@ function vistaProximos(cont) {
   cont.append(caja);
 }
 
+// Días ya jugados, con todas las competiciones juntas: lo que pasó ayer o cualquier día anterior.
+function vistaPasados(cont) {
+  const hoy = hoyInicio(), dias = new Map();
+  for (const m of D.partidos) {
+    const d = diaDe(m);
+    if (d < hoy && m.s !== "pendiente") { if (!dias.has(d)) dias.set(d, []); dias.get(d).push(m); }
+  }
+  const orden = [...dias.keys()].sort((a, b) => a - b);
+  // Acierto global de la temporada, de todas las competiciones
+  const todo = resumenAcierto(D.partidos), semana = resumenAcierto(D.partidos.filter(m => diaDe(m) >= hoy - 7 * 864e5));
+  const caja0 = el("div", "cifras");
+  const cifra = (v, t) => { const c = el("div", "cifra"); c.append(el("b", "", v), el("span", "", t)); caja0.append(c); };
+  cifra(todo.n ? pct(todo.ok, todo.n) + " %" : "—", "acierto global de la temporada");
+  cifra(todo.ok, "aciertos");
+  cifra(todo.n - todo.ok, "fallos");
+  cifra(semana.n ? pct(semana.ok, semana.n) + " %" : "—", "últimos 7 días (" + semana.ok + " de " + semana.n + ")");
+  cifra(todo.nAlto ? pct(todo.okAlto, todo.nAlto) + " %" : "—", "con 60 % o más (" + todo.okAlto + " de " + todo.nAlto + ")");
+  cont.append(caja0);
+  if (!orden.length) { cont.append(el("div", "vacio", "Aún no hay días jugados.")); return; }
+  if (!dias.has(estado.diaPasado)) estado.diaPasado = orden[orden.length - 1];
+  const corto = new Intl.DateTimeFormat("es-ES", { weekday: "short", day: "numeric", month: "numeric" });
+  const riel = el("div", "jornadas"); riel.setAttribute("aria-label", "Días");
+  let activo = null;
+  for (const d of orden) {
+    const ps = dias.get(d), r = resumenAcierto(ps), b = el("button");
+    const fecha = d === hoy - 864e5 ? "ayer" : corto.format(new Date(d)).replace(",", "");
+    b.append(el("b", "", fecha), el("small", "", r.n ? r.ok + "/" + r.n : ps.length + " jug."));
+    b.setAttribute("aria-pressed", d === estado.diaPasado);
+    b.title = fmtDia.format(new Date(d)) + (r.n ? ": el modelo acertó " + r.ok + " de " + r.n : "");
+    b.onclick = () => { estado.diaPasado = d; pintar(); };
+    if (d === estado.diaPasado) activo = b;
+    riel.append(b);
+  }
+  cont.append(riel);
+  requestAnimationFrame(() => { if (activo) riel.scrollLeft = activo.offsetLeft - riel.offsetLeft - riel.clientWidth / 2 + activo.offsetWidth / 2; });
+
+  const ps = dias.get(estado.diaPasado), r = resumenAcierto(ps);
+  const t = el("div", "titulo-seccion");
+  t.append(el("h2", "", (estado.diaPasado === hoy - 864e5 ? "Ayer, " : "") + fmtDia.format(new Date(estado.diaPasado))),
+           el("span", "", r.n ? "El modelo acertó " + r.ok + " de " + r.n + " (" + Math.round(r.ok / r.n * 100) + " %)" : "Sin pronósticos evaluables"));
+  cont.append(t);
+  const caja = el("div", "lista");
+  for (const c of [...new Set(ps.map(m => m.c))].sort((a, b) => a - b)) {
+    const del = ps.filter(m => m.c === c).sort((a, b) => new Date(a.f) - new Date(b.f));
+    const rc = resumenAcierto(del);
+    caja.append(el("div", "dia", D.comps[c] + (rc.n ? " · " + rc.ok + "/" + rc.n : "")));
+    del.forEach(m => caja.append(filaPartido(m, true)));
+  }
+  cont.append(caja);
+}
+
 function vistaBusqueda(cont, lista, texto) {
   const q = norm(texto);
   const r = lista.filter(m => norm(m.l).includes(q) || norm(m.v).includes(q) || norm(m.a || m.cf).includes(q)).reverse();
@@ -638,7 +691,7 @@ function pintar() {
     b.onclick = () => { estado.pestana = val; estado.abierta = null; try { localStorage.setItem("registro-pestana", String(val)); } catch (e) {} pintar(); };
     return b;
   };
-  nav.append(boton("Hoy y próximos", "proximos"), Object.assign(el("span", "separador"), { ariaHidden: "true" }));
+  nav.append(boton("Hoy y próximos", "proximos"), boton("Días anteriores", "pasados"), Object.assign(el("span", "separador"), { ariaHidden: "true" }));
   D.comps.forEach((c, i) => {
     if (c === D.copas[0]) nav.append(Object.assign(el("span", "separador"), { ariaHidden: "true" }));
     nav.append(boton(c, i));
@@ -650,6 +703,7 @@ function pintar() {
 
 function pintarVista(cont) {
   if (estado.pestana === "proximos") { vistaProximos(cont); return; }
+  if (estado.pestana === "pasados") { vistaPasados(cont); return; }
   const lista = D.partidos.filter(m => m.c === estado.pestana);
   cifras(cont, lista);
   const barra = el("div", "barra-vistas"), seg = el("div", "segmentos");
