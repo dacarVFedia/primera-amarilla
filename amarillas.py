@@ -48,6 +48,12 @@ HISTORIA_SELECCIONES = (
 )
 MESES_SELECCIONES = (3, 6, 7, 9, 10, 11)  # parones internacionales y torneos de verano
 NACIONALES = set(SELECCIONES) | {h[0] for h in HISTORIA_SELECCIONES}
+# Ligas que no salen en el registro: solo sirven para conocer a los equipos de copa que no juegan las seis grandes.
+# ESPN no da árbitros de estas ligas. Suiza, Rumanía y Chipre solo tienen la temporada 2025/26 en ESPN.
+LIGAS_APOYO = {"Portugal": "por.1", "Bélgica": "bel.1", "Turquía": "tur.1", "Grecia": "gre.1", "Escocia": "sco.1",
+               "Austria": "aut.1", "Dinamarca": "den.1", "Noruega": "nor.1", "Suecia": "swe.1", "Suiza": "sui.1",
+               "Rumanía": "rou.1", "Chipre": "cyp.1"}
+APOYO_DESDE = "2025-07-01"
 # Competición -> identificador en la web de la UEFA (árbitro y jornada)
 COPAS_UEFA = {"Champions League": 1, "Europa League": 14, "Conference League": 2019, "Liga de Naciones": 2014}
 TEMPORADAS_PASADAS = (2023, 2024, 2025)
@@ -232,7 +238,7 @@ def partidos_dia_espn(liga, dia):
 def liga_espn(comp):
     if comp in LIGAS:
         return LIGAS[comp][1]
-    return COPAS.get(comp) or SELECCIONES.get(comp) or next((h[1] for h in HISTORIA_SELECCIONES if h[0] == comp), None)
+    return COPAS.get(comp) or SELECCIONES.get(comp) or LIGAS_APOYO.get(comp) or next((h[1] for h in HISTORIA_SELECCIONES if h[0] == comp), None)
 
 
 def alineacion_espn(liga, id_partido, terminado=True):
@@ -407,6 +413,11 @@ def descargar_historia(fd_key, hilos=6, aviso=print):
             if d.month in MESES_SELECCIONES:
                 tareas.append((comp, liga, temporada_actual(d), d.isoformat()))
             d += timedelta(days=1)
+    # Ligas de apoyo: todos los días (cada una tiene su calendario; los días vacíos también se guardan)
+    d = date.fromisoformat(APOYO_DESDE)
+    while d <= hoy:
+        tareas += [(comp, liga, temporada_actual(d), d.isoformat()) for comp, liga in LIGAS_APOYO.items()]
+        d += timedelta(days=1)
 
     aviso(f"Amarillas: consultando {len(tareas)} días de partido (los ya guardados no gastan red)...")
 
@@ -540,6 +551,11 @@ class Estado:
             g = dict(self.g)
             self._anotar(dict(p, al=None))
             self.g = g
+        elif p.get("comp") in LIGAS_APOYO:
+            # Cuentan para sus equipos y jugadores, pero no cambian las medias generales de las seis grandes
+            g, gj = dict(self.g), dict(self.gj)
+            self._anotar(p)
+            self.g, self.gj = g, gj
         else:
             self._anotar(p)
 
