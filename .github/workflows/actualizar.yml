@@ -78,7 +78,7 @@ jobs:
     needs: publicar
     if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 75
     env:
       TZ: Europe/Madrid
       GH_TOKEN: ${{ github.token }}
@@ -86,12 +86,15 @@ jobs:
     steps:
       - name: Esperar y lanzar la siguiente actualización
         run: |
+          # La cadena no se para nunca: GitHub puede saltarse todas las tareas programadas de una mañana.
+          # De madrugada, una vez por hora; en horario de partidos, cada ~15 minutos.
           hora=$(date +%H%M)
           if [ "$hora" -lt 1045 ] && [ "$hora" -gt 0030 ]; then
-            echo "Fuera del horario de partidos ($hora): la cadena se para hasta la tarea programada."
-            exit 0
+            echo "Madrugada ($hora): siguiente actualización dentro de una hora."
+            sleep 3300
+          else
+            sleep 780
           fi
-          sleep 780
           otras=$(gh run list -R "$REPO" -w actualizar.yml -L 20 --json databaseId,status \
             --jq "[.[] | select(.databaseId != ${{ github.run_id }}) | select(.status != \"completed\")] | length")
           if [ "$otras" -gt 0 ]; then
