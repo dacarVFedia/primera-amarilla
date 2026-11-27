@@ -3,6 +3,7 @@
 !.gitignore
 !amarillas.py
 !registro.py
+!arbitros_oficiales.py
 !analisis.py
 !registro_plantilla.html
 !README.md

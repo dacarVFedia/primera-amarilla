@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 sys.dont_write_bytecode = True
 
 import amarillas as am
+import arbitros_oficiales
 
 CARPETA = os.path.dirname(os.path.abspath(__file__))
 PLANTILLA = os.path.join(CARPETA, "registro_plantilla.html")
@@ -208,6 +209,9 @@ def construir():
             p["arbitro"] = arbitro_manual(manual, p["local"], p["visitante"])
 
     pron = am.Pronosticador(partidos)
+    # Árbitros designados que publican las ligas antes del partido (football-data no los da hasta después)
+    oficiales = arbitros_oficiales.poner(calendarios, set(pron.estado.arbitros), ahora, am.CACHE, fallos)
+    print(f"Árbitros oficiales leídos de las ligas: {oficiales}")
     previas = previas_sin_mirar_resultado(partidos, actual)
     resta = 1 - pron.sin_amarilla
 

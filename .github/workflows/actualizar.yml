@@ -9,6 +9,7 @@ on:
       - arbitros_confirmados.csv
       - amarillas.py
       - registro.py
+      - arbitros_oficiales.py
       - registro_plantilla.html
       - .github/workflows/actualizar.yml
   schedule:
@@ -39,6 +40,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # Para leer los PDF de designaciones de árbitros (RFEF y KNVB)
+      - name: Instalar el lector de PDF
+        run: pip install --quiet pypdf
       - name: Recuperar partidos ya descargados
         uses: actions/cache@v4
         with:
