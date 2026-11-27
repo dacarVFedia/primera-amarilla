@@ -9,6 +9,7 @@ Los partidos ya descargados se guardan en cache_amarillas/ y no se vuelven a ped
 """
 
 import json
+import math
 import os
 import re
 import time
@@ -463,6 +464,20 @@ K_ARBITRO = 20     # ídem para árbitros
 PESO_TEMPORADA_ANTERIOR = 0.3
 MIN_PARTIDOS = 4   # por debajo no se da pronóstico
 K_JUGADOR = 10    # ídem para cada jugador
+# En copas y selecciones el modelo de ligas se fía demasiado: un 62 % es en realidad un ~58 %.
+# Se rebaja su confianza multiplicando el logit (estudio del 27-11-2026 con 844 partidos: mismo acierto,
+# porcentajes más realistas). No cambia qué equipo sale como favorito.
+FACTOR_COPAS = 0.73
+
+
+def es_copa(comp):
+    return comp in COPAS or comp in NACIONALES
+
+
+def ajuste_copa(prob, comp):
+    if not es_copa(comp) or prob <= 0 or prob >= 1:
+        return prob
+    return sigmoide(FACTOR_COPAS * math.log(prob / (1 - prob)))
 NOMBRES_RASGOS = ("local", "amarillas", "provocadas", "primera", "faltas", "puntos", "arbitro_local", "arbitro_x_amarillas",
                   "amonestables_x_regateadores")
 RASGOS_EQUIPOS = (0, 1, 2, 3, 4, 5)
@@ -732,7 +747,7 @@ class Pronosticador:
         if min(l["n"], v["n"]) < MIN_PARTIDOS:
             return None
         arb = self.buscar_arbitro(arbitro)
-        pl = probabilidad(self.pesos, RASGOS_TODOS, self.estado.rasgos(id_l, id_v, arb, xi))
+        pl = ajuste_copa(probabilidad(self.pesos, RASGOS_TODOS, self.estado.rasgos(id_l, id_v, arb, xi)), comp)
         pl_total, pv_total = pl * (1 - self.sin_amarilla), (1 - pl) * (1 - self.sin_amarilla)
         info_arb = self.estado.arbitro(arb)
         return {

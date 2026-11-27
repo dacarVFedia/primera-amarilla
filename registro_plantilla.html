@@ -157,7 +157,7 @@ td.detalle { white-space: normal; text-align: left; background: var(--bg); paddi
       <p>Cada predicción usa solo lo ocurrido antes de ese partido, así que "Acertó" y "Falló" son una prueba real. Cuenta amarillas, faltas, amarillas que provoca al rival, puntos, jugar en casa y árbitro. También mira a los jugadores: cuánto se amonesta a los de un once y cuántas faltas reciben los del otro. Hasta que sale la alineación, alrededor de una hora antes, usa el último once de cada equipo; después, el titular ("Con once titular"). No usa cuotas.</p>
       <p>Si un partido no tiene árbitro publicado, puedes elegirlo en su desplegable y el porcentaje se recalcula. El árbitro suele mover pocos puntos. Al pulsar Confirmar, se queda guardado en todos tus dispositivos y también después del partido. Si la fuente oficial publica otro árbitro, manda la fuente.</p>
       <p id="caja-olvidar" hidden><button class="accion secundaria" id="olvidar" type="button">Olvidar la clave de este dispositivo</button></p>
-      <p>En copas y selecciones el modelo tiene pocos datos, sobre todo de equipos de ligas que no sigue. Para conocerlos usa también las ligas de Portugal, Bélgica, Turquía, Grecia, Escocia, Austria, Dinamarca, Noruega, Suecia, Suiza, Rumanía y Chipre, que no salen aquí. Fíate menos de esos porcentajes. En las selecciones ayuda lo que sus jugadores hacen en sus clubes.</p>
+      <p>En copas y selecciones el modelo tiene pocos datos, sobre todo de equipos de ligas que no sigue. Para conocerlos usa también las ligas de Portugal, Bélgica, Turquía, Grecia, Escocia, Austria, Dinamarca, Noruega, Suecia, Suiza, Rumanía y Chipre, que no salen aquí. Como ahí el modelo tiende a pasarse de confiado, sus porcentajes salen rebajados para que se parezcan a lo que de verdad acierta. El equipo elegido es el mismo. En las selecciones ayuda lo que sus jugadores hacen en sus clubes.</p>
     </div>
     <div>
       <h3>De dónde sale</h3>
@@ -222,7 +222,7 @@ function limpiarLocal(m) {
 function recalcular(m) {
   const nom = valorArbitro(m), a = nom && D.arbitros[nom];
   if (!a) { m.pl = m.pl0; m.pv = m.pv0; m.elegido = null; return; }
-  const q = 1 / (1 + Math.exp(-(m.b + D.pesoLoc * a[0] * 5 + D.pesoAm * a[1] * m.d)));
+  const q = 1 / (1 + Math.exp(-(m.k || 1) * (m.b + D.pesoLoc * a[0] * 5 + D.pesoAm * a[1] * m.d)));
   m.pl = Math.round(q * D.resta * 1000) / 10;
   m.pv = Math.round((1 - q) * D.resta * 1000) / 10;
   m.elegido = nom;

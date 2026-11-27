@@ -95,8 +95,8 @@ def previas_sin_mirar_resultado(partidos, actual):
         if p["temporada"] == actual:
             n = min((estado.equipos.get(p["id_l"]) or {}).get("n", 0), (estado.equipos.get(p["id_v"]) or {}).get("n", 0))
             if n >= am.MIN_PARTIDOS:
-                previas[p["id"]] = am.probabilidad(pesos, am.RASGOS_TODOS, estado.rasgos(p["id_l"], p["id_v"], p.get("arbitro"),
-                                                                                       am.titulares(p.get("al"))))
+                previas[p["id"]] = am.ajuste_copa(am.probabilidad(pesos, am.RASGOS_TODOS, estado.rasgos(
+                    p["id_l"], p["id_v"], p.get("arbitro"), am.titulares(p.get("al")))), p["comp"])
         estado.anotar(p)
     return previas
 
@@ -283,6 +283,8 @@ def construir():
                         x = pron.estado.rasgos(pron.buscar_equipo(fila["l"], comp), pron.buscar_equipo(fila["v"], comp), None, xi)
                         fila["b"] = round(sum(w * v for w, v in zip(pron.pesos, x)), 5)
                         fila["d"] = round(x[1], 5)
+                        if am.es_copa(comp):
+                            fila["k"] = am.FACTOR_COPAS  # la página rebaja la confianza igual que el modelo
             filas.append(fila)
     poner_directo([f for f in filas if f["s"] == "juego"], fallos)
     filas.sort(key=lambda f: f["f"])
