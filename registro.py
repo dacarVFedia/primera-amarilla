@@ -12,8 +12,11 @@ No usa The Odds API, así que no gasta créditos.
 
 import csv
 import json
+import math
 import os
+import re
 import sys
+import urllib.request
 import webbrowser
 from datetime import datetime, timedelta, timezone
 
@@ -171,6 +174,69 @@ def poner_directo(en_juego, fallos):
                              vivo="Descanso" if descanso else (estado.get("displayClock") or "En juego"))
 
 
+ARCHIVO_MOSTRADOS = os.path.join(am.CACHE, "pronosticos_mostrados.json")
+
+
+def clave_mostrado(comp, dia, local, visitante):
+    return "|".join((comp, dia, am._simple(local), am._simple(visitante)))
+
+
+SEMILLA_MOSTRADOS = os.path.join(CARPETA, "pronosticos_vistos_inicio.json")  # lo visto antes de existir esto
+
+
+def vistos_en_pagina(datos):
+    """Pronósticos de los partidos sin empezar de una página ya generada, tal como los enseñaba
+    (con el árbitro confirmado a mano, la página recalcula igual que aquí)."""
+    salida = {}
+    for m in datos.get("partidos", []):
+        if m.get("s") != "pendiente" or m.get("pl") is None:
+            continue
+        pl, pv = m["pl"], m["pv"]
+        a = (datos.get("arbitros") or {}).get(m.get("cf") or "")
+        if a and m.get("b") is not None:
+            q = 1 / (1 + math.exp(-(m.get("k") or 1) * (m["b"] + datos["pesoLoc"] * a[0] * 5 + datos["pesoAm"] * a[1] * m["d"])))
+            pl, pv = round(q * datos["resta"] * 1000) / 10, round((1 - q) * datos["resta"] * 1000) / 10
+        salida[clave_mostrado(datos["comps"][m["c"]], m["f"][:10], m["l"], m["v"])] = [pl, pv]
+    return salida
+
+
+def leer_publicada():
+    """Los datos de la página que está publicada ahora mismo, o {} si no se puede leer."""
+    try:
+        req = urllib.request.Request(f"https://{REPOSITORIO.split('/')[0].lower()}.github.io/{REPOSITORIO.split('/')[1]}/",
+                                     headers={"User-Agent": "primera-amarilla/1.0", "Cache-Control": "no-cache"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            texto = r.read().decode("utf-8")
+        return json.loads(re.search(r"const D = (\{.*?\});\n", texto, re.S).group(1))
+    except Exception:
+        return {}
+
+
+def leer_mostrados():
+    mostrados = {}
+    for ruta in (SEMILLA_MOSTRADOS, ARCHIVO_MOSTRADOS):
+        try:
+            with open(ruta, encoding="utf-8") as f:
+                mostrados.update(json.load(f))
+        except (OSError, ValueError):
+            pass
+    # Lo que enseña ahora la página publicada manda: es exactamente lo que se ha visto
+    mostrados.update(vistos_en_pagina(leer_publicada()))
+    return mostrados
+
+
+def guardar_mostrados(mostrados, ahora):
+    """Guarda los pronósticos enseñados antes de cada partido; se olvidan a los 60 días."""
+    limite = (ahora - timedelta(days=60)).date().isoformat()
+    vivos = {k: v for k, v in mostrados.items() if k.split("|")[1] >= limite}
+    try:
+        os.makedirs(am.CACHE, exist_ok=True)
+        with open(ARCHIVO_MOSTRADOS, "w", encoding="utf-8") as f:
+            json.dump(vivos, f, ensure_ascii=False)
+    except OSError:
+        pass
+
+
 def construir():
     key = clave_football_data()
     partidos, fallos = am.descargar_historia(key)
@@ -228,6 +294,18 @@ def construir():
         i = pron.buscar_equipo(texto, comp)
         return pron.equipos[i]["nombre"] if i is not None else texto
 
+    # El pronóstico que la página enseñaba justo antes de empezar cada partido. Es el que se califica después,
+    # para que el acierto sea el de lo que se vio (y se apostó), no el de un cálculo rehecho al acabar.
+    mostrados = leer_mostrados()
+
+    def mostrado(comp, fecha, local, visitante):
+        dia = fecha_de(fecha).date()
+        for d in (dia, dia - timedelta(days=1), dia + timedelta(days=1)):
+            r = mostrados.get(clave_mostrado(comp, d.isoformat(), local, visitante))
+            if r:
+                return r
+        return None
+
     filas, unidos = [], set()
     for p in partidos:
         if p["temporada"] != actual or p["comp"] not in ORDEN:
@@ -242,6 +320,9 @@ def construir():
             "al": p["am_l"], "av": p["am_v"], "fl": p["faltas_l"], "fv": p["faltas_v"],
             "pl": None if q is None else round(q * resta * 100, 1), "pv": None if q is None else round((1 - q) * resta * 100, 1),
         })
+        visto = mostrado(p["comp"], p["fecha"], p["local"], p["visitante"])
+        if visto:
+            filas[-1]["pl"], filas[-1]["pv"] = visto
         if p.get("confirmado"):
             filas[-1]["cf"] = p["arbitro"]
 
@@ -289,7 +370,17 @@ def construir():
                         fila["d"] = round(x[1], 5)
                         if am.es_copa(comp):
                             fila["k"] = am.FACTOR_COPAS  # la página rebaja la confianza igual que el modelo
+                    k_m = clave_mostrado(comp, c["fecha"][:10], fila["l"], fila["v"])
+                    if fila["s"] == "pendiente":
+                        # Lo que ve la persona: con el árbitro confirmado a mano, la página recalcula con él
+                        visto = a if not fila.get("cf") or arb else pron.pronostico(fila["l"], fila["v"], comp, fila["cf"], xi) or a
+                        fav = visto["equipo"] == fila["l"]
+                        mostrados[k_m] = [round((visto["prob"] if fav else visto["probOtro"]) * 100, 1),
+                                          round((visto["probOtro"] if fav else visto["prob"]) * 100, 1)]
+                    elif k_m in mostrados:
+                        fila["pl"], fila["pv"] = mostrados[k_m]
             filas.append(fila)
+    guardar_mostrados(mostrados, ahora)
     poner_directo([f for f in filas if f["s"] == "juego"], fallos)
     filas.sort(key=lambda f: f["f"])
 
