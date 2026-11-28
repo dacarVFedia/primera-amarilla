@@ -201,24 +201,31 @@ def _resumir_evento(ev, en_juego=False):
                     return None
         return None
 
-    amarillas = []
+    # Las amarillas se cuentan para las estadísticas; la primera tarjeta puede ser también una roja directa,
+    # como en las casas de apuestas (pedido por David el 28-11-2026 tras una roja al Bayern)
+    amarillas, tarjetas = [], []
     for d in c.get("details", []):
         texto = (d.get("type") or {}).get("text") or ""
-        if d.get("yellowCard") or "Yellow" in texto:
-            equipo = (d.get("team") or {}).get("id")
-            if equipo in (id_l, id_v):
-                amarillas.append((_segundos(d), "L" if equipo == id_l else "V"))
+        amarilla = d.get("yellowCard") or "Yellow" in texto
+        roja = d.get("redCard") or "Red Card" in texto
+        equipo = (d.get("team") or {}).get("id")
+        if (amarilla or roja) and equipo in (id_l, id_v):
+            t = (_segundos(d), "L" if equipo == id_l else "V")
+            tarjetas.append(t)
+            if amarilla:
+                amarillas.append(t)
     amarillas.sort(key=lambda a: a[0])
+    tarjetas.sort(key=lambda a: a[0])
     return {
         "fecha": ev["date"], "id": ev["id"],
         "id_l": id_l, "id_v": id_v,
         "local": equipos["home"]["team"]["displayName"], "visitante": equipos["away"]["team"]["displayName"],
         "gl": int(equipos["home"].get("score") or 0), "gv": int(equipos["away"].get("score") or 0),
         "am_l": sum(a[1] == "L" for a in amarillas), "am_v": sum(a[1] == "V" for a in amarillas),
-        "primera": amarillas[0][1] if amarillas else None,
-        "minuto": round(amarillas[0][0] / 60) if amarillas else None,
+        "primera": tarjetas[0][1] if tarjetas else None,
+        "minuto": round(tarjetas[0][0] / 60) if tarjetas else None,
         # Dos en el mismo instante: no se sabe cuál fue antes
-        "empate_primera": len(amarillas) > 1 and amarillas[0][0] == amarillas[1][0] and amarillas[0][1] != amarillas[1][1],
+        "empate_primera": len(tarjetas) > 1 and tarjetas[0][0] == tarjetas[1][0] and tarjetas[0][1] != tarjetas[1][1],
         "faltas_l": faltas(equipos["home"]), "faltas_v": faltas(equipos["away"]),
     }
 
